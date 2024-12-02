@@ -370,7 +370,8 @@ st.title('Mentorship Network and Career Milestones Visualization')
 
 with st.container():
     # Mentor selection
-    mentor_options = ['Douglas J. Wiebe', 'Stephen Hargarten', 'Andrew V. Papachristos', 'Susan B. Sorenson']
+    # mentor_options = df_lineage['last_author'].unique().tolist()
+    mentor_options = ['Douglas J. Wiebe', 'Stephen Hargarten', 'Andrew V. Papachristos', 'Susan B. Sorenson'] # Whitelisted researchers
     selected_mentor = st.selectbox('Select Mentor Name:', mentor_options)
 
     # Lineage Level selection
