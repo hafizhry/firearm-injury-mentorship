@@ -375,7 +375,7 @@ with st.container():
     selected_mentor = st.selectbox('Select Mentor Name:', mentor_options)
 
     # Lineage Level selection
-    max_level = st.selectbox('Select Lineage Level:', [1, 2, 3], index=2)
+    max_level = st.selectbox('Select Lineage Level:', [1, 2, 3], index=0)  # Set default max_level to 1
 
 # Generate the plot based on user selections
 fig = plot_mentorship_3(selected_mentor, max_level)
