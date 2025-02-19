@@ -8,10 +8,26 @@ import random
 import pickle
 
 # Set page config
-st.set_page_config(layout="wide", page_title="Firearm Injury Mentorship Lineage")
+st.set_page_config(layout="wide", page_title="Shirtsleeves to Shirtsleeves")
 
 # Add title
-st.title("Firearm Injury Mentorship Lineage")
+st.title("Shirtsleeves to Shirtsleeves")
+
+st.markdown("""
+### A University of Michigan Project on Research Legacy in Firearm Injury Prevention
+
+This visualization explores the mentorship lineages in firearm injury research, inspired by the economic principle 
+"shirtsleeves to shirtsleeves in three generations" - where wealth typically diminishes through generations.
+
+In firearm injury research, we examine how research expertise and funding, like wealth, can be sustained across 
+generations of mentors and mentees. Since the field's inception fifty years ago, we've seen pioneering investigators, 
+faced funding challenges, and now witness renewed support for research.
+
+**Our Goal**: To understand and strengthen the mentorship patterns that create lasting research legacies, ensuring 
+future generations of researchers can build upon their predecessors' work effectively.
+
+---
+""")
 
 # Add legend header
 st.markdown("<h3 style='text-align: left; font-size: 18px; margin-bottom: 10px;'>Generation Level Legend:</h3>", unsafe_allow_html=True)
@@ -63,10 +79,10 @@ st.subheader("Search and Select Mentor")
 # Get all author names and sort them
 all_authors = sorted(list(G.nodes()))
 # Create the dropdown
-selected_mentor = st.selectbox("Select a mentor", [""] + all_authors, help="Select a mentor from the dropdown list")
+selected_mentor = st.selectbox("Select a mentor to zoom to or 'World View' to see the entire network", ["World View"] + all_authors, help="Select a mentor from the dropdown list or 'World View' to see the entire network")
 
 # Use the dropdown selection
-final_search_term = selected_mentor
+final_search_term = "" if selected_mentor == "World View" else selected_mentor
 
 def compute_positions(G, selected_authors=None):
     """
@@ -235,7 +251,7 @@ def create_figure(G, node_positions, nodes_by_level):
         layout=go.Layout(
             showlegend=False,
             hovermode='closest',
-            margin=dict(b=50, l=0, r=0, t=30),
+            margin=dict(b=10, l=0, r=0, t=45),
             paper_bgcolor='#F0F8FF',
             plot_bgcolor='#F0F8FF',
             xaxis=dict(
@@ -244,7 +260,7 @@ def create_figure(G, node_positions, nodes_by_level):
                     font=dict(color='black')
                 ),
                 showgrid=True,
-                gridcolor='grey',
+                gridcolor='lightgrey',
                 gridwidth=0.5,
                 zeroline=False,
                 tickmode='linear',
@@ -259,7 +275,7 @@ def create_figure(G, node_positions, nodes_by_level):
                 linecolor='grey',
                 mirror=True,
                 showticklabels=True,
-                side='bottom'
+                side='top'
             ),
             yaxis=dict(title=None, showticklabels=False, showgrid=True, zeroline=False),
             height=2000  # Full view height
@@ -310,12 +326,12 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
         x_padding = max(10, (x_max - x_min) * 0.4)  # At least 40 years padding or 20% of range
         y_padding = 20
         
-        # Ensure minimum x-axis range of 100 years for longitudinal view
+        # Ensure minimum x-axis range of 20 years for longitudinal view
         x_range_size = x_max - x_min
         if x_range_size < 100:
             x_center = (x_max + x_min) / 2
-            x_min = x_center - 10  # 50 years before center
-            x_max = x_center + 10  # 50 years after center
+            x_min = x_center - 10  
+            x_max = x_center + 10 
         
         x_range = [x_min - x_padding, x_max + x_padding]
         y_range = [y_min - y_padding, y_max + y_padding]
@@ -324,11 +340,15 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
         fig.update_layout(
             xaxis=dict(
                 range=x_range,
-                dtick=10,  # Show tick marks every 10 years
-                tickmode='linear'
+                dtick=2,  
+                tickmode='linear',
+                gridcolor='lightgrey',
+                side='top'
             ),
-            yaxis=dict(range=y_range),
-            height=700  # Set height to 900 when zoomed in
+            yaxis=dict(
+                range=y_range,
+            ),
+            height=700  
         )
         
         # Highlight the lineage
@@ -380,47 +400,30 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
     
     return fig
 
-# Sidebar
-# st.sidebar.header("Network Information")
-# st.sidebar.write(f"Total Mentors: {G.number_of_nodes()}")
-# st.sidebar.write(f"Total Connections: {G.number_of_edges()}")
-
 # Create visualization
 fig, edge_trace, node_traces = create_figure(G, node_positions, nodes_by_level)
 
-# Apply search and zoom if search term is provided
+# Apply search and zoom if search term is provided and not World View
 if final_search_term:
     fig = highlight_and_zoom_to_mentor(fig, G, node_positions, final_search_term)
+else:
+    # Reset to world view settings
+    fig.update_layout(
+        xaxis=dict(
+            autorange=True,
+            dtick=5,
+            tickmode='linear',
+            side='top'
+        ),
+        yaxis=dict(autorange=True),
+        height=2000  # Full view height for world view
+    )
+    # Reset all nodes to full opacity and original size
+    for trace in fig.data:
+        if hasattr(trace, 'marker'):
+            trace.marker.opacity = 1.0
+            trace.marker.size = 7
+            trace.textfont.color = 'rgba(0,0,0,0)'  # Hide all text in world view
 
 # Display the graph
 st.plotly_chart(fig, theme=None, use_container_width=True)
-
-# Add filters
-# st.sidebar.subheader("Filters")
-# selected_level = st.sidebar.selectbox(
-#     "Filter by Generation",
-#     ["All"] + list(set(nx.get_node_attributes(G, 'level').values()))
-# )
-
-# if selected_level != "All":
-#     filtered_nodes = [node for node, attr in G.nodes(data=True) 
-#                      if attr.get('level') == selected_level]
-#     subgraph = G.subgraph(filtered_nodes)
-#     subgraph_positions, subgraph_nodes_by_level = compute_positions(subgraph)  # Compute positions for subgraph
-#     filtered_fig, _, _ = create_figure(subgraph, subgraph_positions, subgraph_nodes_by_level)
-#     st.plotly_chart(filtered_fig, theme=None, use_container_width=True)
-
-# Display node details on click
-# selected_node = st.sidebar.selectbox(
-#     "Select a Mentor to View Details",
-#     [""] + sorted(G.nodes())
-# )
-
-# if selected_node:
-#     st.sidebar.subheader("Mentor Details")
-#     node_data = G.nodes[selected_node]
-#     st.sidebar.write(f"**Level:** {node_data.get('level', 'Unknown')}")
-#     st.sidebar.write(f"**First Publication Year:** {node_data.get('first_publication_year', 'Unknown')}")
-#     # st.sidebar.write(f"**Gender:** {node_data.get('gender', 'Unknown')}")
-#     st.sidebar.write(f"**Clusters:** {node_data.get('cluster_keywords', 'Unknown')}")
-
