@@ -56,6 +56,18 @@ def load_data():
 
 G, df_track_record = load_data()
 
+# Add search functionality
+st.subheader("Search and Select Mentor")
+
+# Create single column for dropdown
+# Get all author names and sort them
+all_authors = sorted(list(G.nodes()))
+# Create the dropdown
+selected_mentor = st.selectbox("Select a mentor", [""] + all_authors, help="Select a mentor from the dropdown list")
+
+# Use the dropdown selection
+final_search_term = selected_mentor
+
 def compute_positions(G, selected_authors=None):
     """
     Compute node positions based on their generations and publication years.
@@ -136,7 +148,7 @@ def compute_positions(G, selected_authors=None):
 
     return node_positions, nodes_by_level
 
-# Execute compute positions
+# Compute node positions
 node_positions, nodes_by_level = compute_positions(G)
 
 def create_figure(G, node_positions, nodes_by_level):
@@ -200,13 +212,18 @@ def create_figure(G, node_positions, nodes_by_level):
             for (n, _, _) in level_nodes
         ]
 
+        # Extract just the names for the node labels
+        node_names = [n for (n, _, _) in level_nodes]
+
         trace = go.Scatter(
             x=level_node_x,
             y=level_node_y,
-            mode='markers',
+            mode='markers+text',  # Add text mode to support showing names
             marker=dict(size=7, color=level_colors[level], line_width=1),
-            text=level_node_text,
+            text=node_names,  # Use node names for text
             textposition='top center',
+            textfont=dict(size=10, color='rgba(0,0,0,0)'),  # Start with transparent text
+            hovertext=level_node_text,  # Use full info for hover
             hoverinfo='text',
             name=level,
             legendgroup=level
@@ -245,47 +262,165 @@ def create_figure(G, node_positions, nodes_by_level):
                 side='bottom'
             ),
             yaxis=dict(title=None, showticklabels=False, showgrid=True, zeroline=False),
-            height=2000,
+            height=2000  # Full view height
         )
     )
     return fig, edge_trace, node_traces
 
+def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
+    """
+    Highlight a mentor and their lineage, then zoom to their position
+    """
+    if not search_term:
+        return fig
+    
+    # Find matching mentors (case-insensitive partial match)
+    matching_mentors = [n for n in G.nodes() if search_term.lower() in n.lower()]
+    
+    if not matching_mentors:
+        st.warning(f"No mentor found matching '{search_term}'")
+        return fig
+    
+    # If multiple matches found, let user select one
+    if len(matching_mentors) > 1:
+        selected_mentor = st.selectbox(
+            "Multiple matches found. Select a mentor:",
+            matching_mentors
+        )
+    else:
+        selected_mentor = matching_mentors[0]
+    
+    # Get ancestors and descendants
+    ancestors = list(nx.ancestors(G, selected_mentor))
+    descendants = list(nx.descendants(G, selected_mentor))
+    lineage = ancestors + descendants + [selected_mentor]
+    
+    # Get position of the selected mentor
+    if selected_mentor in node_positions:
+        center_x, center_y = node_positions[selected_mentor]
+        
+        # Calculate the bounds of the lineage
+        x_positions = [node_positions[n][0] for n in lineage if n in node_positions]
+        y_positions = [node_positions[n][1] for n in lineage if n in node_positions]
+        
+        x_min, x_max = min(x_positions), max(x_positions)
+        y_min, y_max = min(y_positions), max(y_positions)
+        
+        # Add padding
+        x_padding = max(10, (x_max - x_min) * 0.4)  # At least 40 years padding or 20% of range
+        y_padding = 20
+        
+        # Ensure minimum x-axis range of 100 years for longitudinal view
+        x_range_size = x_max - x_min
+        if x_range_size < 100:
+            x_center = (x_max + x_min) / 2
+            x_min = x_center - 10  # 50 years before center
+            x_max = x_center + 10  # 50 years after center
+        
+        x_range = [x_min - x_padding, x_max + x_padding]
+        y_range = [y_min - y_padding, y_max + y_padding]
+        
+        # Update figure layout for zooming
+        fig.update_layout(
+            xaxis=dict(
+                range=x_range,
+                dtick=10,  # Show tick marks every 10 years
+                tickmode='linear'
+            ),
+            yaxis=dict(range=y_range),
+            height=700  # Set height to 900 when zoomed in
+        )
+        
+        # Highlight the lineage
+        for trace in fig.data:
+            if hasattr(trace, 'marker'):
+                # Get the node positions for this trace
+                node_x = trace.x
+                node_y = trace.y
+                node_text = trace.text
+                
+                # Create lists for opacity
+                opacity_list = []
+                size_list = []
+                text_list = []
+                
+                for i in range(len(node_x)):
+                    # Safely handle None values in node_text
+                    try:
+                        node_text_value = node_text[i] if node_text and i < len(node_text) else None
+                        node_name = node_text_value.split('<br>')[0].replace('Node: ', '') if node_text_value else ''
+                    except (AttributeError, IndexError):
+                        node_name = ''
+                        
+                    if node_name in lineage:
+                        opacity_list.append(1.0)
+                        size_list.append(10 if node_name == selected_mentor else 7)  # Make selected mentor larger
+                        text_list.append(node_name)  # Show name for highlighted nodes
+                    else:
+                        opacity_list.append(0.2)
+                        size_list.append(7)
+                        text_list.append('')  # No text for non-highlighted nodes
+                
+                # Update marker properties
+                trace.marker.opacity = opacity_list
+                trace.marker.size = size_list
+                
+                # Update text visibility based on lineage
+                text_colors = []
+                for i in range(len(node_x)):
+                    node_name = trace.text[i] if trace.text and i < len(trace.text) else ''
+                    if node_name in lineage:
+                        text_colors.append('black')  # Show text for lineage
+                    else:
+                        text_colors.append('rgba(0,0,0,0)')  # Hide text for others
+                
+                trace.textfont.color = text_colors
+        
+        st.success(f"Showing lineage for {selected_mentor}")
+    
+    return fig
+
 # Sidebar
-st.sidebar.header("Network Information")
-st.sidebar.write(f"Total Mentors: {G.number_of_nodes()}")
-st.sidebar.write(f"Total Connections: {G.number_of_edges()}")
+# st.sidebar.header("Network Information")
+# st.sidebar.write(f"Total Mentors: {G.number_of_nodes()}")
+# st.sidebar.write(f"Total Connections: {G.number_of_edges()}")
 
 # Create visualization
 fig, edge_trace, node_traces = create_figure(G, node_positions, nodes_by_level)
+
+# Apply search and zoom if search term is provided
+if final_search_term:
+    fig = highlight_and_zoom_to_mentor(fig, G, node_positions, final_search_term)
 
 # Display the graph
 st.plotly_chart(fig, theme=None, use_container_width=True)
 
 # Add filters
-st.sidebar.subheader("Filters")
-selected_level = st.sidebar.selectbox(
-    "Filter by Generation",
-    ["All"] + list(set(nx.get_node_attributes(G, 'level').values()))
-)
+# st.sidebar.subheader("Filters")
+# selected_level = st.sidebar.selectbox(
+#     "Filter by Generation",
+#     ["All"] + list(set(nx.get_node_attributes(G, 'level').values()))
+# )
 
-if selected_level != "All":
-    filtered_nodes = [node for node, attr in G.nodes(data=True) 
-                     if attr.get('level') == selected_level]
-    subgraph = G.subgraph(filtered_nodes)
-    filtered_fig, _, _ = create_figure(subgraph)
-    st.plotly_chart(filtered_fig, theme=None, use_container_width=True)
+# if selected_level != "All":
+#     filtered_nodes = [node for node, attr in G.nodes(data=True) 
+#                      if attr.get('level') == selected_level]
+#     subgraph = G.subgraph(filtered_nodes)
+#     subgraph_positions, subgraph_nodes_by_level = compute_positions(subgraph)  # Compute positions for subgraph
+#     filtered_fig, _, _ = create_figure(subgraph, subgraph_positions, subgraph_nodes_by_level)
+#     st.plotly_chart(filtered_fig, theme=None, use_container_width=True)
 
 # Display node details on click
-selected_node = st.sidebar.selectbox(
-    "Select a Mentor to View Details",
-    [""] + sorted(G.nodes())
-)
+# selected_node = st.sidebar.selectbox(
+#     "Select a Mentor to View Details",
+#     [""] + sorted(G.nodes())
+# )
 
-if selected_node:
-    st.sidebar.subheader("Mentor Details")
-    node_data = G.nodes[selected_node]
-    st.sidebar.write(f"**Level:** {node_data.get('level', 'Unknown')}")
-    st.sidebar.write(f"**First Publication Year:** {node_data.get('first_publication_year', 'Unknown')}")
-    # st.sidebar.write(f"**Gender:** {node_data.get('gender', 'Unknown')}")
-    st.sidebar.write(f"**Clusters:** {node_data.get('cluster_keywords', 'Unknown')}")
+# if selected_node:
+#     st.sidebar.subheader("Mentor Details")
+#     node_data = G.nodes[selected_node]
+#     st.sidebar.write(f"**Level:** {node_data.get('level', 'Unknown')}")
+#     st.sidebar.write(f"**First Publication Year:** {node_data.get('first_publication_year', 'Unknown')}")
+#     # st.sidebar.write(f"**Gender:** {node_data.get('gender', 'Unknown')}")
+#     st.sidebar.write(f"**Clusters:** {node_data.get('cluster_keywords', 'Unknown')}")
 
