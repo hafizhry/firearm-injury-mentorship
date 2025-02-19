@@ -13,6 +13,37 @@ st.set_page_config(layout="wide", page_title="Firearm Injury Mentorship Lineage"
 # Add title
 st.title("Firearm Injury Mentorship Lineage")
 
+# Add legend header
+st.markdown("<h3 style='text-align: left; font-size: 18px; margin-bottom: 10px;'>Generation Level Legend:</h3>", unsafe_allow_html=True)
+
+# Add legend below title
+level_colors = {
+    'First Gen': 'red',
+    'Second Gen': 'blue',
+    'Third Gen': 'green',
+    'Fourth Gen': 'purple',
+    'Fifth Gen': 'orange',
+    'Sixth Gen': 'pink',
+    'Seventh Gen': 'brown',
+    'Other': 'grey'
+}
+
+# Create a horizontal layout for the legend using columns
+legend_cols = st.columns(8)  # Create 8 columns for the legend
+for i, (level, color) in enumerate(level_colors.items()):
+    col_index = i % 8  # Determine which column to put the legend item in
+    with legend_cols[col_index]:
+        st.markdown(
+            f'<div style="display: flex; align-items: center; margin: 5px 0;">'
+            f'<div style="width: 15px; height: 15px; background-color: {color}; border-radius: 50%; margin-right: 8px;"></div>'
+            f'<div style="font-size: 14px;">{level}</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+# Add a separator
+st.markdown("---")
+
 # Load data from pickle files
 @st.cache_resource
 def load_data():
@@ -165,7 +196,7 @@ def create_figure(G, node_positions, nodes_by_level):
             f"First Title: {G.nodes[n].get('first_title', 'Unknown')}<br>"
             f"Predecessors: {', '.join(list(G.predecessors(n)))}<br>"
             f"Clusters: {G.nodes[n].get('cluster_keywords', 'Unknown')}<br>"
-            f"Gender: {G.nodes[n].get('gender', 'Unknown')}"
+            # f"Gender: {G.nodes[n].get('gender', 'Unknown')}"
             for (n, _, _) in level_nodes
         ]
 
@@ -185,38 +216,36 @@ def create_figure(G, node_positions, nodes_by_level):
     fig = go.Figure(
         data=[edge_trace] + node_traces,
         layout=go.Layout(
-            # title=dict(
-            #     text='Chronologically Ordered Mentorship Lineage',
-            #     x=0.5,
-            #     y=1.0,
-            #     xanchor='center',
-            #     yanchor='top',
-            #     font=dict(size=20)
-            # ),
-            showlegend=True,
+            showlegend=False,
             hovermode='closest',
-            margin=dict(b=0, l=0, r=0, t=30),
+            margin=dict(b=50, l=0, r=0, t=30),
+            paper_bgcolor='#F0F8FF',
+            plot_bgcolor='#F0F8FF',
             xaxis=dict(
-                title='Year',
+                title=dict(
+                    text='Year',
+                    font=dict(color='black')
+                ),
                 showgrid=True,
-                gridcolor='white',
+                gridcolor='grey',
                 gridwidth=0.5,
                 zeroline=False,
                 tickmode='linear',
-                dtick=10,
+                dtick=5,
                 tickangle=0,
-                tickfont=dict(size=10),
+                tickfont=dict(size=10, color='black'),
+                ticks='outside',
+                tickwidth=2,
+                tickcolor='grey',
+                ticklen=8,
+                showline=True,
+                linecolor='grey',
+                mirror=True,
+                showticklabels=True,
+                side='bottom'
             ),
             yaxis=dict(title=None, showticklabels=False, showgrid=True, zeroline=False),
             height=2000,
-            legend=dict(
-                title="Node Level",
-                orientation="h",
-                yanchor="top",
-                y=1.0001,
-                xanchor="right",
-                x=1
-            )
         )
     )
     return fig, edge_trace, node_traces
@@ -230,7 +259,7 @@ st.sidebar.write(f"Total Connections: {G.number_of_edges()}")
 fig, edge_trace, node_traces = create_figure(G, node_positions, nodes_by_level)
 
 # Display the graph
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, theme=None, use_container_width=True)
 
 # Add filters
 st.sidebar.subheader("Filters")
@@ -244,7 +273,7 @@ if selected_level != "All":
                      if attr.get('level') == selected_level]
     subgraph = G.subgraph(filtered_nodes)
     filtered_fig, _, _ = create_figure(subgraph)
-    st.plotly_chart(filtered_fig, use_container_width=True)
+    st.plotly_chart(filtered_fig, theme=None, use_container_width=True)
 
 # Display node details on click
 selected_node = st.sidebar.selectbox(
@@ -257,6 +286,6 @@ if selected_node:
     node_data = G.nodes[selected_node]
     st.sidebar.write(f"**Level:** {node_data.get('level', 'Unknown')}")
     st.sidebar.write(f"**First Publication Year:** {node_data.get('first_publication_year', 'Unknown')}")
-    st.sidebar.write(f"**Gender:** {node_data.get('gender', 'Unknown')}")
+    # st.sidebar.write(f"**Gender:** {node_data.get('gender', 'Unknown')}")
     st.sidebar.write(f"**Clusters:** {node_data.get('cluster_keywords', 'Unknown')}")
 
