@@ -6,12 +6,71 @@ import networkx as nx
 import plotly.graph_objects as go
 import random
 import pickle
+import base64
+from pathlib import Path
 
 # Set page config
 st.set_page_config(layout="wide", page_title="Shirtsleeves to Shirtsleeves")
 
-# Add title
-st.title("Shirtsleeves to Shirtsleeves")
+# Load and encode the background image
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+def set_background_image(png_file):
+    bin_str = get_base64_of_bin_file(png_file)
+    page_bg_img = '''
+    <style>
+        .title-container {
+            background-image: url("data:image/png;base64,%s");
+        }
+    </style>
+    ''' % bin_str
+    return page_bg_img
+
+# Set the background image
+background_image_path = "source_files/Shield-Pattern-Hero.png"
+st.markdown(set_background_image(background_image_path), unsafe_allow_html=True)
+
+# Add custom CSS for the title section
+st.markdown("""
+    <style>
+        .title-container {
+            position: relative;
+            text-align: center;
+            color: white;
+            padding: 4rem 0;
+            margin-bottom: 2rem;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .title-text {
+            font-size: 2.5rem;
+            font-weight: bold;
+            text-decoration: underline;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            margin: 0;
+            padding: 1rem 0;
+        }
+        .subtitle-text {
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            margin: 0;
+            padding-bottom: 1rem;
+        }
+    </style>
+    <div class="title-container">
+        <h1 class="title-text">Shirtsleeves to Shirtsleeves in Three Generations</h1>
+    </div>
+""", unsafe_allow_html=True)
 
 st.markdown("""
 ### A University of Michigan Project on Research Legacy in Firearm Injury Prevention
@@ -29,37 +88,6 @@ future generations of researchers can build upon their predecessors' work effect
 ---
 """)
 
-# Add legend header
-st.markdown("<h3 style='text-align: left; font-size: 18px; margin-bottom: 10px;'>Generation Level Legend:</h3>", unsafe_allow_html=True)
-
-# Add legend below title
-level_colors = {
-    'First Gen': 'red',
-    'Second Gen': 'blue',
-    'Third Gen': 'green',
-    'Fourth Gen': 'purple',
-    'Fifth Gen': 'orange',
-    'Sixth Gen': 'pink',
-    'Seventh Gen': 'brown',
-    'Other': 'grey'
-}
-
-# Create a horizontal layout for the legend using columns
-legend_cols = st.columns(8)  # Create 8 columns for the legend
-for i, (level, color) in enumerate(level_colors.items()):
-    col_index = i % 8  # Determine which column to put the legend item in
-    with legend_cols[col_index]:
-        st.markdown(
-            f'<div style="display: flex; align-items: center; margin: 5px 0;">'
-            f'<div style="width: 15px; height: 15px; background-color: {color}; border-radius: 50%; margin-right: 8px;"></div>'
-            f'<div style="font-size: 14px;">{level}</div>'
-            '</div>',
-            unsafe_allow_html=True
-        )
-
-# Add a separator
-st.markdown("---")
-
 # Load data from pickle files
 @st.cache_resource
 def load_data():
@@ -73,13 +101,45 @@ def load_data():
 G, df_track_record = load_data()
 
 # Add search functionality
-st.subheader("Search and Select Mentor")
+st.subheader("Search and Select Author")
+
+# Define color scheme for generation levels
+level_colors = {
+    'First Gen': 'red',
+    'Second Gen': 'blue',
+    'Third Gen': 'green',
+    'Fourth Gen': 'purple',
+    'Fifth Gen': 'orange',
+    'Sixth Gen': 'pink',
+    'Seventh Gen': 'brown',
+    'Other': 'grey'
+}
+
+# Add legend header and legend before the dropdown
+st.markdown("<h3 style='text-align: left; font-size: 16px; margin-bottom: 5px; color: #666;'>Generation Level Legend:</h3>", unsafe_allow_html=True)
+
+# Create a horizontal layout for the legend using columns
+legend_cols = st.columns(8)  # Create 8 columns for the legend
+for i, (level, color) in enumerate(level_colors.items()):
+    col_index = i % 8  # Determine which column to put the legend item in
+    with legend_cols[col_index]:
+        st.markdown(
+            f'<div style="display: flex; align-items: center; margin: 2px 0;">'
+            f'<div style="width: 12px; height: 12px; background-color: {color}; border-radius: 50%; margin-right: 6px;"></div>'
+            f'<div style="font-size: 12px; color: #444;">{level}</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+# Add a small space after the legend
+st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
 
 # Create single column for dropdown
 # Get all author names and sort them
 all_authors = sorted(list(G.nodes()))
+
 # Create the dropdown
-selected_mentor = st.selectbox("Select a mentor to zoom to or 'World View' to see the entire network", ["World View"] + all_authors, help="Select a mentor from the dropdown list or 'World View' to see the entire network")
+selected_mentor = st.selectbox("Select an author to zoom to or 'World View' to see the entire network", ["World View"] + all_authors, help="Select an author from the dropdown list or 'World View' to see the entire network")
 
 # Use the dropdown selection
 final_search_term = "" if selected_mentor == "World View" else selected_mentor
@@ -285,7 +345,7 @@ def create_figure(G, node_positions, nodes_by_level):
 
 def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
     """
-    Highlight a mentor and their lineage, then zoom to their position
+    Highlight an author and their lineage, then zoom to their position
     """
     if not search_term:
         return fig
@@ -300,7 +360,7 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
     # If multiple matches found, let user select one
     if len(matching_mentors) > 1:
         selected_mentor = st.selectbox(
-            "Multiple matches found. Select a mentor:",
+            "Multiple matches found. Select an author:",
             matching_mentors
         )
     else:
