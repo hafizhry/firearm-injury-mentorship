@@ -7,379 +7,256 @@ import plotly.graph_objects as go
 import random
 import pickle
 
+# Set page config
+st.set_page_config(layout="wide", page_title="Firearm Injury Mentorship Lineage")
+
+# Add title
+st.title("Firearm Injury Mentorship Lineage")
+
 # Load data from pickle files
-with open('df_track_record.pkl', 'rb') as pickle_file:
-    df_track_record = pickle.load(pickle_file)
+@st.cache_resource
+def load_data():
+    with open(f'source_files/G_v4.pkl', 'rb') as pickle_file:
+        G = pickle.load(pickle_file)
 
-with open('df_lineage.pkl', 'rb') as pickle_file:
-    df_lineage = pickle.load(pickle_file)
+    with open(f'source_files/df_track_record.pkl', 'rb') as pickle_file:
+        df_track_record = pickle.load(pickle_file)
+    return G, df_track_record
 
-# Create a network graph
-def plot_mentorship_3(selected_mentor, max_level):
-    # Filter the DataFrame to select the specific center mentor row
-    df_lineage_sel = df_lineage[df_lineage['last_author'] == selected_mentor]
+G, df_track_record = load_data()
 
-    # Initialize a directed graph
-    G = nx.DiGraph()
+def compute_positions(G, selected_authors=None):
+    """
+    Compute node positions based on their generations and publication years.
+    Uses a combination of level_y_offsets and dynamic spacing.
+    """
+    random.seed(422)
 
-    # First, add the center mentor node
-    if not df_lineage_sel.empty:
-        center_mentor = df_lineage_sel.iloc[0]['last_author']
-        center_mentor_first_year = df_lineage_sel.iloc[0]['last_author_first_publication_year']
-        center_num_of_first_author = df_lineage_sel.iloc[0]['last_author_num_of_first_author']
-        center_num_of_last_author = df_lineage_sel.iloc[0]['last_author_num_of_last_author']
-        # Add center mentor node with their publication year and publication counts
-        G.add_node(center_mentor,
-                   year=center_mentor_first_year,
-                   type="center_mentor",
-                   num_of_first_author=center_num_of_first_author,
-                   num_of_last_author=center_num_of_last_author)
+    # If selected_authors is provided, create a subgraph with those authors and their descendants
+    if selected_authors is not None:
+        # Get all selected authors that exist in the graph
+        valid_authors = [author for author in selected_authors if author in G.nodes()]
 
-    # Sets of mentees
-    first_level_mentees = set()
-    second_level_mentees = set()
-    third_level_mentees = set()
+        # Get all descendants for each selected author
+        all_nodes = set(valid_authors)
+        for author in valid_authors:
+            descendants = nx.descendants(G, author)
+            all_nodes.update(descendants)
 
-    # First Level: Center mentor and their direct mentees (after center_mentor's first year)
-    for _, row in df_lineage_sel.iterrows():
-        center_mentor = row['last_author']
-        center_mentor_first_year = row['last_author_first_publication_year']
+        # Create subgraph with selected nodes
+        G = G.subgraph(all_nodes).copy()
 
-        # Iterate over each first_level mentee in the first_authors list
-        for entry in row['first_authors']:
-            first_level_mentee = entry['first_author']
-            first_level_year = entry['first_publication_year']
-            num_of_first_author = entry['num_of_first_author']
-            num_of_last_author = entry['num_of_last_author']
+    level_y_offsets = {
+        'First Gen': 0,
+        'Second Gen': 20,
+        'Third Gen': 50,
+        'Fourth Gen': 80,
+        'Fifth Gen': 110,
+        'Sixth Gen': 140,
+        'Seventh Gen': 170,
+        'Other': 200
+    }
 
-            if first_level_mentee in first_level_mentees:
-                continue  # Skip if already added
-            first_level_mentees.add(first_level_mentee)
+    all_levels = ['First Gen', 'Second Gen', 'Third Gen', 'Fourth Gen', 'Fifth Gen', 'Sixth Gen', 'Seventh Gen', 'Other']
+    nodes_by_level = {
+        level: [n for n, attr in G.nodes(data=True) if attr.get('level') == level]
+        for level in all_levels
+    }
 
-            # Add each first_level mentee node with their first publication year and publication counts
-            if first_level_mentee != center_mentor:
-                G.add_node(first_level_mentee,
-                          year=first_level_year,
-                          type="first_level",
-                          num_of_first_author=num_of_first_author,
-                          num_of_last_author=num_of_last_author)
+    # Sort 'First Gen' nodes by publication year (reverse order)
+    first_gen_sorted = sorted(
+        nodes_by_level['First Gen'],
+        key=lambda n: G.nodes[n]['first_publication_year'],
+        reverse=True
+    )
 
-                # Create an edge from center mentor to first_level mentee
-                G.add_edge(center_mentor, first_level_mentee, year=center_mentor_first_year)
+    first_gen_y_offsets = {node: i * 10 for i, node in enumerate(first_gen_sorted)}
+    node_positions = {}
 
-                # Stop here if max_level is 1
-                if max_level == 1:
-                    continue
+    # Assign positions for 'First Gen'
+    for node in first_gen_sorted:
+        year = G.nodes[node].get('first_publication_year', 0)
+        node_positions[node] = (year, first_gen_y_offsets[node])
 
-                # Second Level: Check if this first level mentee is also a mentor for someone else
-                df_second_level = df_lineage[(df_lineage['last_author'] == first_level_mentee)]
-                for _, second_row in df_second_level.iterrows():
-                    for second_entry in second_row['first_authors']:
-                        second_level_mentee = second_entry['first_author']
-                        second_level_year = second_entry['first_publication_year']
-                        num_of_first_author = second_entry['num_of_first_author']
-                        num_of_last_author = second_entry['num_of_last_author']
-
-                        if (second_level_mentee in first_level_mentees or second_level_mentee in second_level_mentees):
-                            continue  # Skip if already added in previous levels
-                        second_level_mentees.add(second_level_mentee)
-
-                        # Skip if second-level mentee is the center mentor
-                        if second_level_mentee != center_mentor and second_level_mentee != first_level_mentee:
-                            # Add the second level mentee node
-                            G.add_node(second_level_mentee,
-                                      year=second_level_year,
-                                      type="second_level",
-                                      num_of_first_author=num_of_first_author,
-                                      num_of_last_author=num_of_last_author)
-
-                            # Create an edge from first_level mentee to second_level mentee
-                            G.add_edge(first_level_mentee, second_level_mentee, year=first_level_year)
-
-                            # Stop here if max_level is 2
-                            if max_level == 2:
-                                continue
-
-                            # Third Level: Check if this second level mentee is also a mentor for someone else
-                            df_third_level = df_lineage[(df_lineage['last_author'] == second_level_mentee)]
-                            for _, third_row in df_third_level.iterrows():
-                                for third_entry in third_row['first_authors']:
-                                    third_level_mentee = third_entry['first_author']
-                                    third_level_year = third_entry['first_publication_year']
-                                    num_of_first_author = third_entry['num_of_first_author']
-                                    num_of_last_author = third_entry['num_of_last_author']
-
-                                    if (third_level_mentee in first_level_mentees or
-                                        third_level_mentee in second_level_mentees or
-                                        third_level_mentee in third_level_mentees):
-                                        continue  # Skip if already added in previous levels
-                                    third_level_mentees.add(third_level_mentee)
-
-                                    if third_level_mentee != center_mentor and third_level_mentee != first_level_mentee and third_level_mentee != second_level_mentee:
-                                        # Add the third level mentee node
-                                        G.add_node(third_level_mentee,
-                                                  year=third_level_year,
-                                                  type="third_level",
-                                                  num_of_first_author=num_of_first_author,
-                                                  num_of_last_author=num_of_last_author)
-
-                                        # Create an edge from second level mentee to third level mentee
-                                        G.add_edge(second_level_mentee, third_level_mentee, year=second_level_year)
-
-    # Calculate dynamic y_spacing based on node density in each year
-    year_counts = {year: sum(1 for _, data in G.nodes(data=True) if data['year'] == year) for year in {data['year'] for _, data in G.nodes(data=True)}}
-    max_spacing = 8  # Maximum y_spacing for dense years
-    min_spacing = 1  # Minimum y_spacing for sparse years
+    # Dynamic spacing
+    years = [attr.get('first_publication_year', 0) for _, attr in G.nodes(data=True)]
+    year_counts = {year: years.count(year) for year in set(years)}
+    max_spacing = 30
+    min_spacing = 20
     dynamic_y_spacing = {year: max(min_spacing, max_spacing / max(1, count)) for year, count in year_counts.items()}
 
-    # 2D Positioning: Use publication year as the x-coordinate and separate y-positions by mentorship level
-    pos = {}
-    level_y_offset = {"center_mentor": 0, "first_level": 6, "second_level": 12, "third_level": 18}
+    levels_to_place = ['Second Gen', 'Third Gen', 'Fourth Gen', 'Fifth Gen', 'Sixth Gen', 'Seventh Gen']
+    for level in levels_to_place:
+        for node in nodes_by_level[level]:
+            if node in node_positions:
+                continue
+            attributes = G.nodes[node]
+            x_pos = attributes.get('first_publication_year', 0)
+            base_y_offset = level_y_offsets.get(level, 20)
+            y_spacing = dynamic_y_spacing.get(x_pos, min_spacing)
+            predecessors = list(G.predecessors(node))
+            if predecessors:
+                parent_pos = node_positions.get(predecessors[0], (x_pos, base_y_offset))
+                parent_y = parent_pos[1]
+                y_pos = parent_y + random.uniform(y_spacing - 10, y_spacing + 10)
+            else:
+                y_pos = base_y_offset + random.uniform(y_spacing - 10, y_spacing + 10)
+            node_positions[node] = (x_pos, y_pos)
 
-    # To ensure consistent results, set a random seed
-    random.seed(42)
+    return node_positions, nodes_by_level
 
-    # Assign positions for each node based on mentorship level and publication year
-    for year in sorted(year_counts.keys()):
-        mentors_in_year = [node for node, data in G.nodes(data=True) if data['year'] == year]
-        level_positions = {level: 0 for level in level_y_offset}  # Track positions within each level
+# Execute compute positions
+node_positions, nodes_by_level = compute_positions(G)
 
-        for mentor in mentors_in_year:
-            node_type = G.nodes[mentor]['type']
+def create_figure(G, node_positions, nodes_by_level):
+    """
+    Create a Plotly figure for the world graph.
+    """
+    level_colors = {
+        'First Gen': 'red',
+        'Second Gen': 'blue',
+        'Third Gen': 'green',
+        'Fourth Gen': 'purple',
+        'Fifth Gen': 'orange',
+        'Sixth Gen': 'pink',
+        'Seventh Gen': 'brown',
+        'Other': 'grey'
+    }
 
-            # Add a random jitter to the Y position within a small range
-            jitter = random.uniform(-1, 1)  # Adjust jitter range as needed
-            pos[mentor] = (
-                year,
-                level_y_offset[node_type] + level_positions[node_type] * dynamic_y_spacing[year] + jitter
+    plot_nodes = [n for n in G.nodes()]
+
+    node_attrs = [
+        (n, node_positions[n][0], node_positions[n][1], G.nodes[n].get('level', 'Seventh Gen'))
+        for n in plot_nodes if n in node_positions
+    ]
+
+    # Edges
+    edge_x = []
+    edge_y = []
+    for u, v in G.edges():
+        if u in node_positions and v in node_positions:
+            x0, y0 = node_positions[u]
+            x1, y1 = node_positions[v]
+            edge_x.extend([x0, x1, None])
+            edge_y.extend([y0, y1, None])
+
+    edge_trace = go.Scatter(
+        x=edge_x,
+        y=edge_y,
+        line=dict(width=0.5, color='gray'),
+        hoverinfo='none',
+        mode='lines',
+        showlegend=False
+    )
+
+    all_levels = ['First Gen', 'Second Gen', 'Third Gen', 'Fourth Gen', 'Fifth Gen', 'Sixth Gen', 'Seventh Gen', 'Other']
+    node_traces = []
+    for level in all_levels:
+        level_nodes = [(n, x, y) for (n, x, y, lvl) in node_attrs if lvl == level]
+        if not level_nodes:
+            continue
+
+        level_node_x = [x for (_, x, _) in level_nodes]
+        level_node_y = [y for (_, _, y) in level_nodes]
+        level_node_text = [
+            f"Node: {n}<br>"
+            f"Level: {level}<br>"
+            f"First Publication Year: {G.nodes[n].get('first_publication_year', 'Unknown')}<br>"
+            f"First Title: {G.nodes[n].get('first_title', 'Unknown')}<br>"
+            f"Predecessors: {', '.join(list(G.predecessors(n)))}<br>"
+            f"Clusters: {G.nodes[n].get('cluster_keywords', 'Unknown')}<br>"
+            f"Gender: {G.nodes[n].get('gender', 'Unknown')}"
+            for (n, _, _) in level_nodes
+        ]
+
+        trace = go.Scatter(
+            x=level_node_x,
+            y=level_node_y,
+            mode='markers',
+            marker=dict(size=7, color=level_colors[level], line_width=1),
+            text=level_node_text,
+            textposition='top center',
+            hoverinfo='text',
+            name=level,
+            legendgroup=level
+        )
+        node_traces.append(trace)
+
+    fig = go.Figure(
+        data=[edge_trace] + node_traces,
+        layout=go.Layout(
+            # title=dict(
+            #     text='Chronologically Ordered Mentorship Lineage',
+            #     x=0.5,
+            #     y=1.0,
+            #     xanchor='center',
+            #     yanchor='top',
+            #     font=dict(size=20)
+            # ),
+            showlegend=True,
+            hovermode='closest',
+            margin=dict(b=0, l=0, r=0, t=30),
+            xaxis=dict(
+                title='Year',
+                showgrid=True,
+                gridcolor='white',
+                gridwidth=0.5,
+                zeroline=False,
+                tickmode='linear',
+                dtick=10,
+                tickangle=0,
+                tickfont=dict(size=10),
+            ),
+            yaxis=dict(title=None, showticklabels=False, showgrid=True, zeroline=False),
+            height=2000,
+            legend=dict(
+                title="Node Level",
+                orientation="h",
+                yanchor="top",
+                y=1.0001,
+                xanchor="right",
+                x=1
             )
-
-            level_positions[node_type] += 1  # Increment position within the level
-
-    # Prepare edge traces for the 2D plot with arrows and color-coded by direction
-    edge_x_forward, edge_y_forward = [], []
-    edge_x_backward, edge_y_backward = [], []
-
-    for edge in G.edges():
-        x0, y0 = pos[edge[0]]
-        x1, y1 = pos[edge[1]]
-
-        # Determine edge direction based on publication year
-        if x1 >= x0:  # Forward or same year
-            edge_x_forward.extend([x0, x1, None])
-            edge_y_forward.extend([y0, y1, None])
-        else:  # Backward
-            edge_x_backward.extend([x0, x1, None])
-            edge_y_backward.extend([y0, y1, None])
-
-    # Create forward edge trace with blue arrows
-    edge_trace_forward = go.Scatter(
-        x=edge_x_forward, y=edge_y_forward,
-        line=dict(width=1.5, color='lightblue'),
-        mode='lines',
-        name="Forward Lineage",
-        hoverinfo="skip"
+        )
     )
+    return fig, edge_trace, node_traces
 
-    # Create backward edge trace with orange arrows
-    edge_trace_backward = go.Scatter(
-        x=edge_x_backward, y=edge_y_backward,
-        line=dict(width=1.5, color='orange'),
-        mode='lines',
-        name="Backward Lineage",
-        hoverinfo="skip"
-    )
+# Sidebar
+st.sidebar.header("Network Information")
+st.sidebar.write(f"Total Mentors: {G.number_of_nodes()}")
+st.sidebar.write(f"Total Connections: {G.number_of_edges()}")
 
-    # Separate nodes by mentorship level for different colors and prepare node traces
-    center_mentor_nodes = [node for node in G.nodes() if G.nodes[node]['type'] == 'center_mentor']
-    first_level_nodes = [node for node in G.nodes() if G.nodes[node]['type'] == 'first_level']
-    second_level_nodes = [node for node in G.nodes() if G.nodes[node]['type'] == 'second_level']
-    third_level_nodes = [node for node in G.nodes() if G.nodes[node]['type'] == 'third_level']
+# Create visualization
+fig, edge_trace, node_traces = create_figure(G, node_positions, nodes_by_level)
 
-    # Generate hover text with the added fields
-    center_mentor_hover_text = [
-        f"Mentor: {node}<br>"
-        f"Year: {G.nodes[node]['year']}<br>"
-        f"Number of First Author Publications: {G.nodes[node]['num_of_first_author']}<br>"
-        f"Number of Last Author Publications: {G.nodes[node]['num_of_last_author']}"
-        for node in center_mentor_nodes
-    ]
+# Display the graph
+st.plotly_chart(fig, use_container_width=True)
 
-    first_level_hover_text = [
-        f"Center Mentor: {selected_mentor}<br>"
-        f"First Lineage: {node}<br>"
-        f"Year: {G.nodes[node]['year']}<br>"
-        f"Number of First Author Publications: {G.nodes[node]['num_of_first_author']}<br>"
-        f"Number of Last Author Publications: {G.nodes[node]['num_of_last_author']}"
-        for node in first_level_nodes
-    ]
+# Add filters
+st.sidebar.subheader("Filters")
+selected_level = st.sidebar.selectbox(
+    "Filter by Generation",
+    ["All"] + list(set(nx.get_node_attributes(G, 'level').values()))
+)
 
-    second_level_hover_text = [
-        f"Center Mentor: {selected_mentor}<br>"
-        f"First Lineage: {list(G.predecessors(node))[0]}<br>"
-        f"Second Lineage: {node}<br>"
-        f"Year: {G.nodes[node]['year']}<br>"
-        f"Number of First Author Publications: {G.nodes[node]['num_of_first_author']}<br>"
-        f"Number of Last Author Publications: {G.nodes[node]['num_of_last_author']}"
-        for node in second_level_nodes
-    ]
+if selected_level != "All":
+    filtered_nodes = [node for node, attr in G.nodes(data=True) 
+                     if attr.get('level') == selected_level]
+    subgraph = G.subgraph(filtered_nodes)
+    filtered_fig, _, _ = create_figure(subgraph)
+    st.plotly_chart(filtered_fig, use_container_width=True)
 
-    third_level_hover_text = [
-        f"Center Mentor: {selected_mentor}<br>"
-        f"First Lineage: {list(G.predecessors(list(G.predecessors(node))[0]))[0] if list(G.predecessors(list(G.predecessors(node))[0])) else 'N/A'}<br>"
-        f"Second Lineage: {list(G.predecessors(node))[0]}<br>"
-        f"Third Lineage: {node}<br>"
-        f"Year: {G.nodes[node]['year']}<br>"
-        f"Number of First Author Publications: {G.nodes[node]['num_of_first_author']}<br>"
-        f"Number of Last Author Publications: {G.nodes[node]['num_of_last_author']}"
-        for node in third_level_nodes
-    ]
+# Display node details on click
+selected_node = st.sidebar.selectbox(
+    "Select a Mentor to View Details",
+    [""] + sorted(G.nodes())
+)
 
-    # Define alternate text position function
-    def alternate_text_position(index):
-        """Returns an alternating text position to avoid overlap."""
-        positions = ['top center', 'bottom center', 'middle left', 'middle right']
-        return positions[index % len(positions)]
-
-    # Generate trace data
-    center_mentor_trace = go.Scatter(
-        x=[pos[node][0] for node in center_mentor_nodes],
-        y=[pos[node][1] for node in center_mentor_nodes],
-        mode='markers+text',
-        marker=dict(size=12, color='red'),
-        text=[node for node in center_mentor_nodes],
-        textposition=[alternate_text_position(i) for i in range(len(center_mentor_nodes))],
-        textfont=dict(size=12),
-        name="Center Mentor",
-        hovertext=center_mentor_hover_text,
-        hoverinfo="text"
-    )
-
-    first_level_trace = go.Scatter(
-        x=[pos[node][0] for node in first_level_nodes],
-        y=[pos[node][1] for node in first_level_nodes],
-        mode='markers+text',
-        marker=dict(size=12, color='darkblue'),
-        text=[node for node in first_level_nodes],
-        textposition=[alternate_text_position(i) for i in range(len(first_level_nodes))],
-        textfont=dict(size=12),
-        name="First Generation Mentorship",
-        hovertext=first_level_hover_text,
-        hoverinfo="text"
-    )
-
-    second_level_trace = go.Scatter(
-        x=[pos[node][0] for node in second_level_nodes],
-        y=[pos[node][1] for node in second_level_nodes],
-        mode='markers+text',
-        marker=dict(size=10, color='purple'),
-        text=[node for node in second_level_nodes],
-        textposition=[alternate_text_position(i) for i in range(len(second_level_nodes))],
-        textfont=dict(size=10),
-        name="Second Generation Mentorship",
-        hovertext=second_level_hover_text,
-        hoverinfo="text"
-    )
-
-    third_level_trace = go.Scatter(
-        x=[pos[node][0] for node in third_level_nodes],
-        y=[pos[node][1] for node in third_level_nodes],
-        mode='markers+text',
-        marker=dict(size=8, color='green'),
-        text=[node for node in third_level_nodes],
-        textposition=[alternate_text_position(i) for i in range(len(third_level_nodes))],
-        textfont=dict(size=8),
-        name="Third Generation Mentorship",
-        hovertext=third_level_hover_text,
-        hoverinfo="text"
-    )
-
-    # Career Milestones: Filter milestones for the selected mentor
-    df_mentor_milestones = df_track_record[df_track_record['author_name'] == selected_mentor]
-
-    # Add vertical lines at each milestone's start year on the plot
-    milestone_lines = []
-    for _, milestone in df_mentor_milestones.iterrows():
-        start_year = milestone['start_year'] if pd.notna(milestone['start_year']) else milestone['end_year']
-        position_grant = milestone['position_grant']
-        institution_source = milestone['institution_source']
-
-        # Add a vertical line at the start year with hover text showing the milestone
-        milestone_lines.append(go.Scatter(
-            x=[start_year, start_year],
-            y=[0, max(pos.values(), key=lambda v: v[1])[1] + 5],  # Extend the line to fit the plot vertically
-            mode="lines",
-            line=dict(color="gray", dash="dash"),
-            hovertext=f"{position_grant}<br>{institution_source}",
-            name="Career Milestone",
-            hoverinfo="text",
-            showlegend=False
-        ))
-
-    # Plot using Plotly
-    fig = go.Figure(data=[
-        edge_trace_forward,
-        edge_trace_backward,
-        center_mentor_trace,
-        first_level_trace,
-        second_level_trace,
-        third_level_trace,
-        *milestone_lines  # Add all milestone lines to the plot
-    ])
-
-    # Set plot layout
-    fig.update_layout(
-        title=dict(
-            text=f"{selected_mentor}'s Mentorship Network and Career Milestones",
-            x=0.5,  # Title position (0: left, 1: right)
-            y=0.98,  # Title position (0: bottom, 1: top)
-            xanchor='center',  # Horizontal alignment
-            yanchor='top',  # Vertical alignment
-            font=dict(
-                family="Arial",
-                size=20,
-                color="white")
-        ),
-        xaxis=dict(
-            title="Publication Year",
-            tickmode='linear',
-            dtick=1
-        ),
-        yaxis=dict(visible=False),
-        showlegend=True,
-        legend=dict(
-            orientation="h",
-            yanchor="top",
-            y=1.05,
-            xanchor="center",
-            x=0.5
-        ),
-        height=1000,
-        width=2000,
-        margin=dict(l=10, r=10, t=100, b=60)
-    )
-
-    # Return the figure
-    return fig
-
-# Set wide config
-st.set_page_config(layout="wide")
-
-# Title of the app
-st.title('Mentorship Network and Career Milestones Visualization')
-
-with st.container():
-    # Mentor selection
-    # mentor_options = df_lineage['last_author'].unique().tolist()
-    mentor_options = ['Douglas J. Wiebe', 'Stephen Hargarten', 'Andrew V. Papachristos', 'Susan B. Sorenson'] # Whitelisted researchers
-    selected_mentor = st.selectbox('Select Mentor Name:', mentor_options)
-
-    # Lineage Level selection
-    max_level = st.selectbox('Select Lineage Level:', [1, 2, 3], index=0)  # Set default max_level to 1
-
-# Generate the plot based on user selections
-fig = plot_mentorship_3(selected_mentor, max_level)
-
-# Display the plot
-st.plotly_chart(fig, theme=None, use_container_width=True)
+if selected_node:
+    st.sidebar.subheader("Mentor Details")
+    node_data = G.nodes[selected_node]
+    st.sidebar.write(f"**Level:** {node_data.get('level', 'Unknown')}")
+    st.sidebar.write(f"**First Publication Year:** {node_data.get('first_publication_year', 'Unknown')}")
+    st.sidebar.write(f"**Gender:** {node_data.get('gender', 'Unknown')}")
+    st.sidebar.write(f"**Clusters:** {node_data.get('cluster_keywords', 'Unknown')}")
 

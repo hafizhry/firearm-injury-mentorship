@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disjoint Force-Directed Mentorship Lineage</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        .node {
+            stroke: #fff;
+            stroke-width: 1.5px;
+        }
+        .link {
+            stroke: #999;
+            stroke-opacity: 0.6;
+        }
+        text {
+            font-size: 12px;
+            pointer-events: none;
+        }
+        #search-bar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <select id="search-bar">
+        <option value="">Select an author...</option>
+    </select>
+    <script>
+        d3.json("lineage_data.json").then(graphData => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            const svg = d3.select("body").append("svg")
+                .attr("width", width)
+                .attr("height", height)
+                .call(d3.zoom().on("zoom", (event) => {
+                    g.attr("transform", event.transform);
+                }));
+
+            const g = svg.append("g");
+            const dropdown = d3.select("#search-bar");
+
+            // Populate dropdown
+            graphData.nodes.forEach(node => {
+                dropdown.append("option")
+                    .attr("value", node.id)
+                    .text(node.id);
+            });
+
+            dropdown.on("change", function () {
+                const selectedAuthor = this.value;
+                if (selectedAuthor) {
+                    renderGraph(selectedAuthor);
+                }
+            });
+
+            function findConnectedComponent(selectedAuthor) {
+                const visited = new Set();
+                const queue = [selectedAuthor];
+                const componentNodes = new Set();
+                const componentLinks = [];
+
+                while (queue.length > 0) {
+                    const current = queue.shift();
+                    if (visited.has(current)) continue;
+                    visited.add(current);
+                    componentNodes.add(current);
+                    graphData.links.forEach(link => {
+                        if (link.source === current && !visited.has(link.target)) {
+                            queue.push(link.target);
+                            componentNodes.add(link.target);
+                            componentLinks.push(link);
+                        }
+                        if (link.target === current && !visited.has(link.source)) {
+                            queue.push(link.source);
+                            componentNodes.add(link.source);
+                            componentLinks.push(link);
+                        }
+                    });
+                }
+                return {
+                    nodes: graphData.nodes.filter(node => componentNodes.has(node.id)),
+                    links: componentLinks
+                };
+            }
+
+            function renderGraph(selectedAuthor) {
+                const { nodes: filteredNodes, links: filteredLinks } = findConnectedComponent(selectedAuthor);
+                g.selectAll("*").remove();
+
+                const simulation = d3.forceSimulation(filteredNodes)
+                    .force("link", d3.forceLink(filteredLinks).id(d => d.id).distance(100))
+                    .force("charge", d3.forceManyBody().strength(-300))
+                    .force("center", d3.forceCenter(width / 2, height / 2));
+
+                const link = g.append("g")
+                    .attr("class", "links")
+                    .selectAll("line")
+                    .data(filteredLinks)
+                    .enter().append("line")
+                    .attr("class", "link")
+                    .style("stroke", "gray")
+                    .style("stroke-width", 1);
+
+                const node = g.append("g")
+                    .attr("class", "nodes")
+                    .selectAll("circle")
+                    .data(filteredNodes)
+                    .enter().append("circle")
+                    .attr("class", "node")
+                    .attr("r", 7)
+                    .style("fill", d => {
+                        if (d.level === "First Gen") return "red";
+                        if (d.level === "Second Gen") return "blue";
+                        if (d.level === "Third Gen") return "green";
+                        if (d.level === "Fourth Gen") return "purple";
+                        if (d.level === "Fifth Gen") return "orange";
+                        return "gray";
+                    });
+
+                const labels = g.append("g")
+                    .selectAll("text")
+                    .data(filteredNodes)
+                    .enter().append("text")
+                    .attr("dy", -10)
+                    .text(d => `${d.id} (${d.year})`)
+                    .attr("text-anchor", "middle");
+
+                simulation.on("tick", () => {
+                    link
+                        .attr("x1", d => d.source.x)
+                        .attr("y1", d => d.source.y)
+                        .attr("x2", d => d.target.x)
+                        .attr("y2", d => d.target.y);
+
+                    node
+                        .attr("cx", d => d.x)
+                        .attr("cy", d => d.y);
+
+                    labels
+                        .attr("x", d => d.x)
+                        .attr("y", d => d.y);
+                });
+            }
+        }).catch(error => {
+            console.error("Error loading the data: ", error);
+        });
+    </script>
+</body>
+</html>

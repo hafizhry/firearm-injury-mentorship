@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lineage Visualization</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <h1>Lineage Visualization</h1>
+    <input type="text" id="nodeSearch" placeholder="Search for a node...">
+    <div id="chart"></div>
+    <script>
+        // Load lineage data
+        fetch('lineage_data.json')
+            .then(response => response.json())
+            .then(data => {
+                const nodes = data.nodes;
+                const links = data.links;
+
+                // Create traces for edges
+                const edgeX = [];
+                const edgeY = [];
+
+                links.forEach(link => {
+                    const sourceNode = nodes.find(node => node.id === link.source);
+                    const targetNode = nodes.find(node => node.id === link.target);
+
+                    if (sourceNode && targetNode) {
+                        edgeX.push(sourceNode.x, targetNode.x, null);
+                        edgeY.push(sourceNode.y, targetNode.y, null);
+                    }
+                });
+
+                const edgeTrace = {
+                    x: edgeX,
+                    y: edgeY,
+                    mode: 'lines',
+                    line: {
+                        width: 1,
+                        color: '#999'
+                    },
+                    hoverinfo: 'none',
+                    showlegend: false
+                };
+
+                // Create traces for nodes
+                const levelColors = {
+                    'First Gen': 'red',
+                    'Second Gen': 'blue',
+                    'Third Gen': 'green',
+                    'Fourth Gen': 'purple',
+                    'Fifth Gen': 'orange',
+                    'Other': 'gray'
+                };
+
+                const nodeTrace = {
+                    x: nodes.map(node => node.x),
+                    y: nodes.map(node => node.y),
+                    mode: 'markers',
+                    text: nodes.map(node => `Node: ${node.id}<br>Level: ${node.level}<br>Year: ${node.year}`),
+                    marker: {
+                        size: 10,
+                        color: nodes.map(node => levelColors[node.level] || 'gray')
+                    },
+                    hoverinfo: 'text',
+                    name: 'Nodes'
+                };
+
+                // Combine traces for the visualization
+                const layout = {
+                    title: {
+                        text: 'Lineage Visualization',
+                        font: {
+                            size: 24
+                        }
+                    },
+                    xaxis: {
+                        title: 'Year',
+                        showgrid: true,
+                        zeroline: false
+                    },
+                    yaxis: {
+                        showgrid: true,
+                        zeroline: false,
+                        title: 'Node Levels',
+                        tickfont: { size: 10 }
+                    },
+                    height: 5000,  // Increased height for better visibility
+                    legend: {
+                        title: {
+                            text: 'Node Level'
+                        }
+                    },
+                    hovermode: 'closest'
+                };
+
+
+                // Create the Plotly visualization
+                Plotly.newPlot('chart', [edgeTrace, nodeTrace], layout);
+
+                // Add search functionality
+                document.getElementById('nodeSearch').addEventListener('input', function () {
+                    const searchValue = this.value.toLowerCase();
+
+                    const highlightedNodes = nodes.map(node => {
+                        if (node.id.toLowerCase().includes(searchValue)) {
+                            return {
+                                ...node,
+                                marker: {
+                                    size: 12,
+                                    color: 'yellow'
+                                }
+                            };
+                        }
+                        return node;
+                    });
+
+                    const updatedNodeTrace = {
+                        ...nodeTrace,
+                        marker: {
+                            ...nodeTrace.marker,
+                            color: highlightedNodes.map(node => levelColors[node.level] || 'gray')
+                        },
+                        text: highlightedNodes.map(node => `Node: ${node.id}<br>Level: ${node.level}<br>Year: ${node.year}`)
+                    };
+
+                    Plotly.react('chart', [edgeTrace, updatedNodeTrace], layout);
+                });
+            });
+    </script>
+</body>
+</html>
