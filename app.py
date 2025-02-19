@@ -54,11 +54,13 @@ st.markdown("""
         .title-text {
             font-size: 2.5rem;
             font-weight: bold;
-            text-decoration: underline;
+            text-decoration: none;
+            border-bottom: 3px solid #FFD43B;
             color: white;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
             margin: 0;
             padding: 1rem 0;
+            display: inline-block;
         }
         .subtitle-text {
             color: white;
