@@ -102,10 +102,18 @@ def load_data():
 
 G, df_track_record = load_data()
 
-# Add search functionality
-st.subheader("Search and Select Author")
+st.markdown("""
+### Search and Select Author
 
-# Define color scheme for generation levels
+##### How to use:
+1. Use the dropdown to select an author and zoom into their mentorship network.
+2. Select 'World View' to see the entire mentorship network.
+3. Drag to zoom into a specific section and hover the mouse over each dot to see detailed information on the author.
+4. Explore the different generation levels and mentorship direction using the color legend below.
+
+""")
+
+# Define color scheme for generation levels and edges
 level_colors = {
     'First Gen': 'red',
     'Second Gen': 'blue',
@@ -117,13 +125,25 @@ level_colors = {
     'Other': 'grey'
 }
 
-# Add legend header and legend before the dropdown
-st.markdown("<h3 style='text-align: left; font-size: 16px; margin-bottom: 5px; color: #666;'>Generation Level Legend:</h3>", unsafe_allow_html=True)
+edge_colors = {
+    'Forward in time': '#1f77b4',
+    'Backward in time': 'orange'
+}
 
-# Create a horizontal layout for the legend using columns
-legend_cols = st.columns(8)  # Create 8 columns for the legend
+# # Add legend headers
+# st.markdown("<h3 style='text-align: left; font-size: 18px; margin-bottom: 0px; color: #666;'>Legend:</h3>", unsafe_allow_html=True)
+
+# Create columns for both legends
+st.markdown("<div style='display: flex;'>", unsafe_allow_html=True)
+
+# Left column for Generation Levels (reduced margin-bottom to 2px)
+st.markdown("<div style='flex: 1;'>", unsafe_allow_html=True)
+st.markdown("<p style='font-size: 14px; margin-bottom: 2px; color: #666;'>Generation Levels:</p>", unsafe_allow_html=True)
+
+# Create a horizontal layout for the generation legend
+legend_cols = st.columns(8)
 for i, (level, color) in enumerate(level_colors.items()):
-    col_index = i % 8  # Determine which column to put the legend item in
+    col_index = i % 8
     with legend_cols[col_index]:
         st.markdown(
             f'<div style="display: flex; align-items: center; margin: 2px 0;">'
@@ -133,8 +153,26 @@ for i, (level, color) in enumerate(level_colors.items()):
             unsafe_allow_html=True
         )
 
+# Right column for Lineage Direction
+st.markdown("<div style='flex: 1;'>", unsafe_allow_html=True)
+st.markdown("<p style='font-size: 14px; margin-bottom: 5px; color: #666;'>Lineage Direction:</p>", unsafe_allow_html=True)
+
+# Create a horizontal layout for the edge legend
+edge_cols = st.columns(2)
+for i, (edge_type, color) in enumerate(edge_colors.items()):
+    with edge_cols[i]:
+        st.markdown(
+            f'<div style="display: flex; align-items: center; margin: 2px 0;">'
+            f'<div style="width: 20px; height: 2px; background-color: {color}; margin-right: 6px;"></div>'
+            f'<div style="font-size: 12px; color: #444;">{edge_type}</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+st.markdown("</div></div>", unsafe_allow_html=True)
+
 # Add a small space after the legend
-st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
 # Create single column for dropdown
 # Get all author names and sort them
@@ -146,92 +184,105 @@ selected_mentor = st.selectbox("Select an author to zoom to or 'World View' to s
 # Use the dropdown selection
 final_search_term = "" if selected_mentor == "World View" else selected_mentor
 
-def compute_positions(G, selected_authors=None):
+def compute_sequential_grid_positions(G, grid_spacing=30):
     """
-    Compute node positions based on their generations and publication years.
-    Uses a combination of level_y_offsets and dynamic spacing.
+    Compute node positions by processing complete lineages sequentially.
+    Each lineage tree gets its own grid space.
     """
-    random.seed(422)
-
-    # If selected_authors is provided, create a subgraph with those authors and their descendants
-    if selected_authors is not None:
-        # Get all selected authors that exist in the graph
-        valid_authors = [author for author in selected_authors if author in G.nodes()]
-
-        # Get all descendants for each selected author
-        all_nodes = set(valid_authors)
-        for author in valid_authors:
-            descendants = nx.descendants(G, author)
-            all_nodes.update(descendants)
-
-        # Create subgraph with selected nodes
-        G = G.subgraph(all_nodes).copy()
-
-    level_y_offsets = {
-        'First Gen': 0,
-        'Second Gen': 20,
-        'Third Gen': 50,
-        'Fourth Gen': 80,
-        'Fifth Gen': 110,
-        'Sixth Gen': 140,
-        'Seventh Gen': 170,
-        'Other': 200
-    }
-
-    all_levels = ['First Gen', 'Second Gen', 'Third Gen', 'Fourth Gen', 'Fifth Gen', 'Sixth Gen', 'Seventh Gen', 'Other']
+    node_positions = {}
     nodes_by_level = {
-        level: [n for n, attr in G.nodes(data=True) if attr.get('level') == level]
-        for level in all_levels
+        'First Gen': [], 'Second Gen': [], 'Third Gen': [], 
+        'Fourth Gen': [], 'Fifth Gen': [], 'Sixth Gen': [], 
+        'Seventh Gen': [], 'Other': []
     }
-
-    # Sort 'First Gen' nodes by publication year (reverse order)
-    first_gen_sorted = sorted(
-        nodes_by_level['First Gen'],
-        key=lambda n: G.nodes[n]['first_publication_year'],
+    
+    # Find all first gen authors (roots)
+    first_gen_authors = [
+        node for node, attr in G.nodes(data=True) 
+        if attr.get('level') == 'First Gen'
+    ]
+    
+    # Sort first gen authors by publication year
+    first_gen_authors.sort(
+        key=lambda x: G.nodes[x]['first_publication_year'],
         reverse=True
     )
-
-    first_gen_y_offsets = {node: i * 10 for i, node in enumerate(first_gen_sorted)}
-    node_positions = {}
-
-    # Assign positions for 'First Gen'
-    for node in first_gen_sorted:
-        year = G.nodes[node].get('first_publication_year', 0)
-        node_positions[node] = (year, first_gen_y_offsets[node])
-
-    # Dynamic spacing
-    years = [attr.get('first_publication_year', 0) for _, attr in G.nodes(data=True)]
-    year_counts = {year: years.count(year) for year in set(years)}
-    max_spacing = 30
-    min_spacing = 20
-    dynamic_y_spacing = {year: max(min_spacing, max_spacing / max(1, count)) for year, count in year_counts.items()}
-
-    levels_to_place = ['Second Gen', 'Third Gen', 'Fourth Gen', 'Fifth Gen', 'Sixth Gen', 'Seventh Gen']
-    for level in levels_to_place:
-        for node in nodes_by_level[level]:
-            if node in node_positions:
-                continue
-            attributes = G.nodes[node]
-            x_pos = attributes.get('first_publication_year', 0)
-            base_y_offset = level_y_offsets.get(level, 20)
-            y_spacing = dynamic_y_spacing.get(x_pos, min_spacing)
-            predecessors = list(G.predecessors(node))
-            if predecessors:
-                parent_pos = node_positions.get(predecessors[0], (x_pos, base_y_offset))
-                parent_y = parent_pos[1]
-                y_pos = parent_y + random.uniform(y_spacing - 10, y_spacing + 10)
-            else:
-                y_pos = base_y_offset + random.uniform(y_spacing - 10, y_spacing + 10)
-            node_positions[node] = (x_pos, y_pos)
-
+    
+    def process_lineage(root_node, current_base_row):
+        """
+        Process a complete lineage tree starting from a root node.
+        Returns the maximum row used in this lineage.
+        """
+        # Dictionary to track occupied grid points in this lineage
+        occupied_grid = set()
+        lineage_positions = {}
+        
+        def place_node_and_descendants(node, base_row, visited=None):
+            if visited is None:
+                visited = set()
+            
+            if node in visited:
+                return base_row
+            
+            visited.add(node)
+            year = G.nodes[node]['first_publication_year']
+            level = G.nodes[node]['level']
+            
+            # Find first available row for this node
+            current_row = base_row
+            while (year, current_row) in occupied_grid:
+                current_row += 1
+            
+            # Place the node
+            lineage_positions[node] = (year, current_row * grid_spacing)
+            occupied_grid.add((year, current_row))
+            nodes_by_level[level].append(node)
+            
+            # Process all descendants
+            max_descendant_row = current_row
+            descendants = list(G.successors(node))
+            
+            # Sort descendants by year
+            descendants.sort(
+                key=lambda x: G.nodes[x]['first_publication_year']
+            )
+            
+            for descendant in descendants:
+                if descendant not in visited:
+                    descendant_row = place_node_and_descendants(
+                        descendant,
+                        max_descendant_row + 1,
+                        visited
+                    )
+                    max_descendant_row = max(max_descendant_row, descendant_row)
+            
+            return max_descendant_row
+        
+        # Process the entire lineage
+        max_row_used = place_node_and_descendants(root_node, current_base_row)
+        
+        # Update global positions
+        node_positions.update(lineage_positions)
+        
+        return max_row_used
+    
+    # Process each first gen author and their complete lineage
+    current_base_row = 0
+    for first_gen in first_gen_authors:
+        # Process this lineage tree
+        max_row = process_lineage(first_gen, current_base_row)
+        
+        # Start next lineage at new base row with some padding
+        current_base_row = max_row + 2  # Add padding between lineages
+    
     return node_positions, nodes_by_level
 
-# Compute node positions
-node_positions, nodes_by_level = compute_positions(G)
+# Execute compute positions
+node_positions, nodes_by_level = compute_sequential_grid_positions(G)
 
 def create_figure(G, node_positions, nodes_by_level):
     """
-    Create a Plotly figure for the world graph.
+    Create a Plotly figure with colored edges based on temporal direction.
     """
     level_colors = {
         'First Gen': 'red',
@@ -245,31 +296,56 @@ def create_figure(G, node_positions, nodes_by_level):
     }
 
     plot_nodes = [n for n in G.nodes()]
-
     node_attrs = [
         (n, node_positions[n][0], node_positions[n][1], G.nodes[n].get('level', 'Seventh Gen'))
         for n in plot_nodes if n in node_positions
     ]
 
-    # Edges
-    edge_x = []
-    edge_y = []
+    # Separate edges by direction
+    forward_edge_x = []
+    forward_edge_y = []
+    backward_edge_x = []
+    backward_edge_y = []
+    
     for u, v in G.edges():
         if u in node_positions and v in node_positions:
             x0, y0 = node_positions[u]
             x1, y1 = node_positions[v]
-            edge_x.extend([x0, x1, None])
-            edge_y.extend([y0, y1, None])
+            year_u = G.nodes[u]['first_publication_year']
+            year_v = G.nodes[v]['first_publication_year']
+            
+            # If target year is greater than source year, it's forward
+            if year_v >= year_u:
+                forward_edge_x.extend([x0, x1, None])
+                forward_edge_y.extend([y0, y1, None])
+            else:
+                backward_edge_x.extend([x0, x1, None])
+                backward_edge_y.extend([y0, y1, None])
 
-    edge_trace = go.Scatter(
-        x=edge_x,
-        y=edge_y,
-        line=dict(width=0.5, color='gray'),
+    # Create separate traces for forward and backward edges
+    forward_edge_trace = go.Scatter(
+        x=forward_edge_x,
+        y=forward_edge_y,
+        line=dict(width=1, color='#1f77b4'),
         hoverinfo='none',
         mode='lines',
-        showlegend=False
+        name='Forward in time',
+        showlegend=False,
+        opacity=0.6
     )
 
+    backward_edge_trace = go.Scatter(
+        x=backward_edge_x,
+        y=backward_edge_y,
+        line=dict(width=1, color='orange'),
+        hoverinfo='none',
+        mode='lines',
+        name='Backward in time',
+        showlegend=False,
+        opacity=0.6
+    )
+
+    # Create node traces
     all_levels = ['First Gen', 'Second Gen', 'Third Gen', 'Fourth Gen', 'Fifth Gen', 'Sixth Gen', 'Seventh Gen', 'Other']
     node_traces = []
     for level in all_levels:
@@ -284,24 +360,23 @@ def create_figure(G, node_positions, nodes_by_level):
             f"Level: {level}<br>"
             f"First Publication Year: {G.nodes[n].get('first_publication_year', 'Unknown')}<br>"
             f"First Title: {G.nodes[n].get('first_title', 'Unknown')}<br>"
-            f"Predecessors: {', '.join(list(G.predecessors(n)))}<br>"
-            f"Clusters: {G.nodes[n].get('cluster_keywords', 'Unknown')}<br>"
-            # f"Gender: {G.nodes[n].get('gender', 'Unknown')}"
-            for (n, _, _) in level_nodes
+            + (f"Predecessors: {', '.join(list(G.predecessors(n)))}<br>" if list(G.predecessors(n)) else "")
+            # + f"Clusters: {G.nodes[n].get('cluster_keywords', 'Unknown')}<br>"
+            # f"Coordinates: ({x:.2f}, {y:.2f})" # Used for debugging
+            for (n, x, y) in level_nodes
         ]
 
-        # Extract just the names for the node labels
         node_names = [n for (n, _, _) in level_nodes]
 
         trace = go.Scatter(
             x=level_node_x,
             y=level_node_y,
-            mode='markers+text',  # Add text mode to support showing names
+            mode='markers+text',
             marker=dict(size=7, color=level_colors[level], line_width=1),
-            text=node_names,  # Use node names for text
+            text=node_names,
             textposition='top center',
-            textfont=dict(size=10, color='rgba(0,0,0,0)'),  # Start with transparent text
-            hovertext=level_node_text,  # Use full info for hover
+            textfont=dict(size=10, color='rgba(0,0,0,0)'),
+            hovertext=level_node_text,
             hoverinfo='text',
             name=level,
             legendgroup=level
@@ -309,7 +384,7 @@ def create_figure(G, node_positions, nodes_by_level):
         node_traces.append(trace)
 
     fig = go.Figure(
-        data=[edge_trace] + node_traces,
+        data=[forward_edge_trace, backward_edge_trace] + node_traces,
         layout=go.Layout(
             showlegend=False,
             hovermode='closest',
@@ -340,10 +415,10 @@ def create_figure(G, node_positions, nodes_by_level):
                 side='top'
             ),
             yaxis=dict(title=None, showticklabels=False, showgrid=True, zeroline=False),
-            height=2000  # Full view height
+            height=2000
         )
     )
-    return fig, edge_trace, node_traces
+    return fig, [forward_edge_trace, backward_edge_trace], node_traces
 
 def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
     """
@@ -385,10 +460,9 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
         y_min, y_max = min(y_positions), max(y_positions)
         
         # Add padding
-        x_padding = max(10, (x_max - x_min) * 0.4)  # At least 40 years padding or 20% of range
-        y_padding = 20
+        x_padding = max(10, (x_max - x_min) * 0.4) 
+        y_padding = 30
         
-        # Ensure minimum x-axis range of 20 years for longitudinal view
         x_range_size = x_max - x_min
         if x_range_size < 100:
             x_center = (x_max + x_min) / 2
