@@ -4,7 +4,7 @@ import streamlit as st
 import pandas as pd
 import networkx as nx
 import plotly.graph_objects as go
-import random
+import numpy as np
 import pickle
 import base64
 from pathlib import Path
@@ -461,7 +461,7 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
         
         # Add padding
         x_padding = max(10, (x_max - x_min) * 0.4) 
-        y_padding = 30
+        y_padding = 35
         
         x_range_size = x_max - x_min
         if x_range_size < 100:
@@ -476,7 +476,7 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
         fig.update_layout(
             xaxis=dict(
                 range=x_range,
-                dtick=2,  
+                dtick=1,  
                 tickmode='linear',
                 gridcolor='lightgrey',
                 side='top'
@@ -531,39 +531,53 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
                         text_colors.append('rgba(0,0,0,0)')  # Hide text for others
                 
                 trace.textfont.color = text_colors
-        
-        # Import data for career milestones
 
-        # Check if the search term is in the track record DataFrame
-        if search_term in df_track_record['mentor_name'].values:
-            # Filter the milestones for the searched mentor
-            df_mentor_milestones = df_track_record[df_track_record['mentor_name'] == search_term]
+        # Filter the milestones for the searched mentor
+        df_mentor_milestones = df_track_record[df_track_record['author_name'] == search_term]
 
-            # Define y-axis start and end positions for the vertical lines
-            first_gen_y_start = min(node_positions[n][1] for n in nodes_by_level['First Gen'])
-            last_gen_y_end = max(node_positions[n][1] for n in nodes_by_level['Fourth Gen'] + nodes_by_level['Fifth Gen'])
+        # Define y-axis start and end positions for the vertical lines
+        first_gen_y_start = min(node_positions[n][1] for n in nodes_by_level['First Gen'])
+        last_gen_y_end = max(node_positions[n][1] for n in nodes_by_level['Fourth Gen'] + nodes_by_level['Fifth Gen'])
 
-            # Add vertical lines for each milestone
-            milestone_lines = []
-            for _, milestone in df_mentor_milestones.iterrows():
-                start_year = milestone['start_year'] if pd.notna(milestone['start_year']) else milestone['end_year']
-                position_grant = milestone['position_grant']
-                institution_source = milestone['institution_source']
+        # Add vertical lines for each milestone
+        milestone_lines = []
+        for _, milestone in df_mentor_milestones.iterrows():
+            start_year = milestone['start_year'] if pd.notna(milestone['start_year']) else milestone['end_year']
+            position_grant = milestone['position_grant']
+            institution_source = milestone['institution_source']
 
-                # Add a vertical line starting at First Gen and ending at Fourth/Fifth Gen
-                milestone_lines.append(go.Scatter(
-                    x=[start_year, start_year],
-                    y=[first_gen_y_start, last_gen_y_end + 3],
-                    mode="lines",
-                    line=dict(color="gray", dash="dash"),
-                    hovertext=f"{position_grant}<br>{institution_source}",
-                    name="Career Milestone",
-                    hoverinfo="text",
-                    showlegend=False
-                ))
+            # Create hover points at intervals along the line
+            num_points = 50  # Number of hover points
+            y_points = np.linspace(first_gen_y_start, last_gen_y_end + 3, num_points)
+            x_points = [start_year] * num_points
 
-            # Add milestone lines to the figure
-            fig.add_traces(milestone_lines)
+            milestone_lines.append(go.Scatter(
+                x=x_points,
+                y=y_points,
+                mode="lines+markers",  # Add invisible markers for better hover
+                line=dict(
+                    color="gray", 
+                    dash="dash", 
+                    width=1
+                ),
+                marker=dict(
+                    size=0,  # Invisible markers
+                    opacity=0
+                ),
+                hoverinfo="text",
+                hovertext=[f"Position/Grant: {position_grant}<br>Institution: {institution_source}"] * num_points,
+                showlegend=True
+            ))
+
+        # Add milestone lines to the figure
+        for line in milestone_lines:
+            fig.add_trace(line)
+
+        # Update layout to ensure hover works
+        fig.update_layout(
+            hovermode='closest',  # This ensures hover works on the nearest point
+            hoverdistance=10    # Increase hover distance
+        )
         
         st.success(f"Showing lineage for {selected_mentor}")
     
