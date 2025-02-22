@@ -372,10 +372,10 @@ def create_figure(G, node_positions, nodes_by_level):
             x=level_node_x,
             y=level_node_y,
             mode='markers+text',
-            marker=dict(size=7, color=level_colors[level], line_width=1),
+            marker=dict(size=10, color=level_colors[level], line_width=1),
             text=node_names,
             textposition='top center',
-            textfont=dict(size=10, color='rgba(0,0,0,0)'),
+            textfont=dict(size=12, color='rgba(0,0,0,0)'),
             hovertext=level_node_text,
             hoverinfo='text',
             name=level,
@@ -403,7 +403,7 @@ def create_figure(G, node_positions, nodes_by_level):
                 tickmode='linear',
                 dtick=5,
                 tickangle=0,
-                tickfont=dict(size=10, color='black'),
+                tickfont=dict(size=12, color='black'),
                 ticks='outside',
                 tickwidth=2,
                 tickcolor='grey',
@@ -450,7 +450,7 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
     
     # Get position of the selected mentor
     if selected_mentor in node_positions:
-        center_x, center_y = node_positions[selected_mentor]
+        # center_x, center_y = node_positions[selected_mentor]
         
         # Calculate the bounds of the lineage
         x_positions = [node_positions[n][0] for n in lineage if n in node_positions]
@@ -510,12 +510,12 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
                         
                     if node_name in lineage:
                         opacity_list.append(1.0)
-                        size_list.append(10 if node_name == selected_mentor else 7)  # Make selected mentor larger
-                        text_list.append(node_name)  # Show name for highlighted nodes
+                        size_list.append(12 if node_name == selected_mentor else 9) 
+                        text_list.append(node_name)  
                     else:
                         opacity_list.append(0.2)
                         size_list.append(7)
-                        text_list.append('')  # No text for non-highlighted nodes
+                        text_list.append('')
                 
                 # Update marker properties
                 trace.marker.opacity = opacity_list
