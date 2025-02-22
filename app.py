@@ -420,7 +420,7 @@ def create_figure(G, node_positions, nodes_by_level):
     )
     return fig, [forward_edge_trace, backward_edge_trace], node_traces
 
-def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
+def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_record=None):
     """
     Highlight an author and their lineage, then zoom to their position
     """
@@ -450,7 +450,7 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
     
     # Get position of the selected mentor
     if selected_mentor in node_positions:
-        # center_x, center_y = node_positions[selected_mentor]
+        center_x, center_y = node_positions[selected_mentor]
         
         # Calculate the bounds of the lineage
         x_positions = [node_positions[n][0] for n in lineage if n in node_positions]
@@ -461,7 +461,7 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
         
         # Add padding
         x_padding = max(10, (x_max - x_min) * 0.4) 
-        y_padding = 35
+        y_padding = 30
         
         x_range_size = x_max - x_min
         if x_range_size < 100:
@@ -476,7 +476,7 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
         fig.update_layout(
             xaxis=dict(
                 range=x_range,
-                dtick=1,  
+                dtick=2,  
                 tickmode='linear',
                 gridcolor='lightgrey',
                 side='top'
@@ -532,52 +532,72 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
                 
                 trace.textfont.color = text_colors
 
-        # Filter the milestones for the searched mentor
-        df_mentor_milestones = df_track_record[df_track_record['author_name'] == search_term]
+        # Add career milestones if df_track_record is provided
+        if df_track_record is not None:
+            # Filter milestones for the selected mentor
+            df_mentor_milestones = df_track_record[df_track_record['author_name'] == selected_mentor]
 
-        # Define y-axis start and end positions for the vertical lines
-        first_gen_y_start = min(node_positions[n][1] for n in nodes_by_level['First Gen'])
-        last_gen_y_end = max(node_positions[n][1] for n in nodes_by_level['Fourth Gen'] + nodes_by_level['Fifth Gen'])
+            # Get related nodes (lineage)
+            related_nodes = lineage
 
-        # Add vertical lines for each milestone
-        milestone_lines = []
-        for _, milestone in df_mentor_milestones.iterrows():
-            start_year = milestone['start_year'] if pd.notna(milestone['start_year']) else milestone['end_year']
-            position_grant = milestone['position_grant']
-            institution_source = milestone['institution_source']
+            # Determine the y-position of the 'First Gen' nodes
+            first_gen_y_position = [
+                node_positions[n][1] for n in related_nodes
+                if G.nodes[n].get('level') == 'First Gen' and n in node_positions
+            ]
+            first_gen_y_start = min(first_gen_y_position) if first_gen_y_position else 0
 
-            # Create hover points at intervals along the line
-            num_points = 50  # Number of hover points
-            y_points = np.linspace(first_gen_y_start, last_gen_y_end + 3, num_points)
-            x_points = [start_year] * num_points
+            # Determine the y-position of the last node
+            last_gen_y_position = [
+                node_positions[n][1] for n in related_nodes
+                if G.nodes[n].get('level') in ['Seventh Gen', 'Sixth Gen', 'Fifth Gen', 'Fourth Gen', 'Third Gen', 'Second Gen'] 
+                and n in node_positions
+            ]
+            last_gen_y_end = max(last_gen_y_position) if last_gen_y_position else max(node_positions.values(), key=lambda v: v[1])[1]
 
-            milestone_lines.append(go.Scatter(
-                x=x_points,
-                y=y_points,
-                mode="lines+markers",  # Add invisible markers for better hover
-                line=dict(
-                    color="gray", 
-                    dash="dash", 
-                    width=1
-                ),
-                marker=dict(
-                    size=0,  # Invisible markers
-                    opacity=0
-                ),
-                hoverinfo="text",
-                hovertext=[f"Position/Grant: {position_grant}<br>Institution: {institution_source}"] * num_points,
-                showlegend=True
-            ))
+            # Add vertical lines for each milestone
+            for _, milestone in df_mentor_milestones.iterrows():
+                start_year = milestone['start_year'] if pd.notna(milestone['start_year']) else milestone['end_year']
+                position_grant = milestone['position_grant']
+                institution_source = milestone['institution_source']
 
-        # Add milestone lines to the figure
-        for line in milestone_lines:
-            fig.add_trace(line)
+                # Create hover points at intervals along the line
+                num_points = 50  
+                y_start = first_gen_y_start - 50  
+                y_end = last_gen_y_end + 50      
+                y_points = np.linspace(y_start, y_end, num_points)
+                x_points = [start_year] * num_points
 
-        # Update layout to ensure hover works
-        fig.update_layout(
-            hovermode='closest',  # This ensures hover works on the nearest point
-            hoverdistance=10    # Increase hover distance
-        )
+                fig.add_trace(go.Scatter(
+                    x=x_points,
+                    y=y_points,
+                    mode="lines+markers",
+                    line=dict(
+                        color="gray",
+                        dash="dash",
+                        width=2  
+                    ),
+                    marker=dict(
+                        size=0,
+                        opacity=0
+                    ),
+                    hoverinfo="text",
+                    hovertext=[f"Position/Grant: {position_grant}<br>Institution: {institution_source}"] * num_points,
+                    showlegend=False,
+                    hoverlabel=dict(
+                        bgcolor="white",
+                        font_size=12,
+                        font_family="Arial"
+                    )
+                ))
+
+            # Update layout to ensure hover works
+            fig.update_layout(
+                hovermode='closest',
+                hoverdistance=100,
+                # Increase the plot margins to accommodate the extended lines
+                margin=dict(t=60, b=60)  # Added top and bottom margins
+            )
         
         st.success(f"Showing lineage for {selected_mentor}")
     
@@ -588,7 +608,7 @@ fig, edge_trace, node_traces = create_figure(G, node_positions, nodes_by_level)
 
 # Apply search and zoom if search term is provided and not World View
 if final_search_term:
-    fig = highlight_and_zoom_to_mentor(fig, G, node_positions, final_search_term)
+    fig = highlight_and_zoom_to_mentor(fig, G, node_positions, final_search_term, df_track_record)
 else:
     # Reset to world view settings
     fig.update_layout(
