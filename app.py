@@ -450,7 +450,7 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
     
     # Get position of the selected mentor
     if selected_mentor in node_positions:
-        center_x, center_y = node_positions[selected_mentor]
+        # center_x, center_y = node_positions[selected_mentor]
         
         # Calculate the bounds of the lineage
         x_positions = [node_positions[n][0] for n in lineage if n in node_positions]
@@ -531,6 +531,39 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term):
                         text_colors.append('rgba(0,0,0,0)')  # Hide text for others
                 
                 trace.textfont.color = text_colors
+        
+        # Import data for career milestones
+
+        # Check if the search term is in the track record DataFrame
+        if search_term in df_track_record['mentor_name'].values:
+            # Filter the milestones for the searched mentor
+            df_mentor_milestones = df_track_record[df_track_record['mentor_name'] == search_term]
+
+            # Define y-axis start and end positions for the vertical lines
+            first_gen_y_start = min(node_positions[n][1] for n in nodes_by_level['First Gen'])
+            last_gen_y_end = max(node_positions[n][1] for n in nodes_by_level['Fourth Gen'] + nodes_by_level['Fifth Gen'])
+
+            # Add vertical lines for each milestone
+            milestone_lines = []
+            for _, milestone in df_mentor_milestones.iterrows():
+                start_year = milestone['start_year'] if pd.notna(milestone['start_year']) else milestone['end_year']
+                position_grant = milestone['position_grant']
+                institution_source = milestone['institution_source']
+
+                # Add a vertical line starting at First Gen and ending at Fourth/Fifth Gen
+                milestone_lines.append(go.Scatter(
+                    x=[start_year, start_year],
+                    y=[first_gen_y_start, last_gen_y_end + 3],
+                    mode="lines",
+                    line=dict(color="gray", dash="dash"),
+                    hovertext=f"{position_grant}<br>{institution_source}",
+                    name="Career Milestone",
+                    hoverinfo="text",
+                    showlegend=False
+                ))
+
+            # Add milestone lines to the figure
+            fig.add_traces(milestone_lines)
         
         st.success(f"Showing lineage for {selected_mentor}")
     
