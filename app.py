@@ -461,7 +461,7 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
         
         # Add padding
         x_padding = max(10, (x_max - x_min) * 0.4) 
-        y_padding = 30
+        y_padding = 50
         
         x_range_size = x_max - x_min
         if x_range_size < 100:
@@ -484,7 +484,7 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
             yaxis=dict(
                 range=y_range,
             ),
-            height=700  
+            height=800  
         )
         
         # Highlight the lineage
