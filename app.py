@@ -484,7 +484,8 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
             yaxis=dict(
                 range=y_range,
             ),
-            height=800  
+            height=700,
+            margin=dict(b=0, t=30, l=0, r=0)
         )
         
         # Highlight the lineage
@@ -594,9 +595,9 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
             # Update layout to ensure hover works
             fig.update_layout(
                 hovermode='closest',
-                hoverdistance=100,
+                hoverdistance=10,
                 # Increase the plot margins to accommodate the extended lines
-                margin=dict(t=60, b=60)  # Added top and bottom margins
+                margin=dict(t=60, b=10)  # Added top and bottom margins
             )
         
         st.success(f"Showing lineage for {selected_mentor}")
@@ -628,5 +629,169 @@ else:
             trace.marker.size = 7
             trace.textfont.color = 'rgba(0,0,0,0)'  # Hide all text in world view
 
+# Add custom CSS to remove plot container margins
+st.markdown("""
+    <style>
+    .element-container:has(div.stPlotlyChart) {
+        margin-bottom: -10px !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # Display the graph
 st.plotly_chart(fig, theme=None, use_container_width=True)
+
+def calculate_mentorship_stats(G, selected_mentor):
+    """Calculate mentorship statistics for the selected mentor."""
+    # Get all descendants
+    descendants = list(nx.descendants(G, selected_mentor))
+    total_descendants = len(descendants)
+    
+    # Calculate branching factor
+    direct_mentees = list(G.successors(selected_mentor))
+    branching_factor = len(direct_mentees)
+    
+    # Calculate lineage depth
+    def get_max_depth(node, current_depth=0, visited=None):
+        if visited is None:
+            visited = set()
+        if node in visited:
+            return current_depth
+        visited.add(node)
+        successors = list(G.successors(node))
+        if not successors:
+            return current_depth
+        return max(get_max_depth(successor, current_depth + 1, visited) for successor in successors)
+    
+    lineage_depth = get_max_depth(selected_mentor)
+    
+    # Calculate average time gap between generations
+    time_gaps = []
+    mentor_year = G.nodes[selected_mentor].get('first_publication_year')
+    
+    # Collect all mentee years for mentoring span calculation
+    mentee_years = []
+    
+    # First check direct mentees
+    for mentee in direct_mentees:
+        mentee_year = G.nodes[mentee].get('first_publication_year')
+        if mentee_year and isinstance(mentee_year, (int, float)):
+            mentee_years.append(mentee_year)
+        if mentee_year and mentor_year and isinstance(mentee_year, (int, float)) and isinstance(mentor_year, (int, float)):
+            gap = mentee_year - mentor_year
+            time_gaps.append(gap)
+    
+    # Then check all other mentor-mentee relationships in the lineage
+    for node in descendants:
+        predecessors = list(G.predecessors(node))
+        for pred in predecessors:
+            if pred != selected_mentor:  # Skip if already counted above
+                mentee_year = G.nodes[node].get('first_publication_year')
+                pred_year = G.nodes[pred].get('first_publication_year')
+                if mentee_year and pred_year and isinstance(mentee_year, (int, float)) and isinstance(pred_year, (int, float)):
+                    gap = mentee_year - pred_year
+                    time_gaps.append(gap)
+                if mentee_year and isinstance(mentee_year, (int, float)):
+                    mentee_years.append(mentee_year)
+    
+    # Calculate mentoring span
+    if mentee_years:
+        mentoring_span = max(mentee_years) - min(mentee_years)
+    else:
+        mentoring_span = None
+    
+    # Calculate average time gap
+    if time_gaps:
+        avg_time_gap = round(sum(time_gaps) / len(time_gaps), 1)
+    else:
+        avg_time_gap = None
+    
+    return {
+        'total_descendants': total_descendants,
+        'branching_factor': branching_factor,
+        'lineage_depth': lineage_depth,
+        'avg_time_gap': avg_time_gap if avg_time_gap is not None else "N/A",
+        'mentoring_span': mentoring_span if mentoring_span is not None else "N/A"
+    }
+
+# After the plotly chart display, add the statistics section
+if final_search_term and final_search_term != "World View":
+    st.markdown('<h3 style="margin: 0 0 10px 0; text-align: center;">Mentorship Tree Statistics</h3>', unsafe_allow_html=True)
+    
+    # Calculate statistics
+    stats = calculate_mentorship_stats(G, final_search_term)
+    
+    # Create five columns for the statistics
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    # Custom CSS for the metric cards
+    st.markdown("""
+        <style>
+        .metric-card {
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            padding: 12px 8px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            height: 100%;
+            margin: 0 4px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .metric-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1f77b4;
+            margin: 3px 0;
+            line-height: 1.2;
+        }
+        .metric-label {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.2;
+            margin-top: 2px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    # Display statistics in cards
+    with col1:
+        st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{stats['total_descendants']}</div>
+                <div class="metric-label">Total Academic Descendants<br>(Direct + Indirect Mentees)</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{stats['branching_factor']}</div>
+                <div class="metric-label">Direct Mentees<br>(First-degree Connections)</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{stats['lineage_depth']}</div>
+                <div class="metric-label">Lineage Depth<br>(Maximum Generations)</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{stats['avg_time_gap']}</div>
+                <div class="metric-label">Average Time Gap<br>(Years Between Generations)</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col5:
+        st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{stats['mentoring_span']}</div>
+                <div class="metric-label">Mentoring Span<br>(Years First to Last Mentee)</div>
+            </div>
+        """, unsafe_allow_html=True)
