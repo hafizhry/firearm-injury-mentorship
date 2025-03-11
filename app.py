@@ -415,7 +415,7 @@ def create_figure(G, node_positions, nodes_by_level):
                 side='top'
             ),
             yaxis=dict(title=None, showticklabels=False, showgrid=True, zeroline=False),
-            height=2000
+            # height=2000
         )
     )
     return fig, [forward_edge_trace, backward_edge_trace], node_traces
@@ -611,6 +611,11 @@ fig, edge_trace, node_traces = create_figure(G, node_positions, nodes_by_level)
 if final_search_term:
     fig = highlight_and_zoom_to_mentor(fig, G, node_positions, final_search_term, df_track_record)
 else:
+    # Calculate the min and max y-coordinates from node positions
+    y_values = [pos[1] for pos in node_positions.values()]
+    min_y = min(y_values) - 5000  # Add padding below
+    max_y = max(y_values) + 5000  # Add padding above
+    
     # Reset to world view settings
     fig.update_layout(
         xaxis=dict(
@@ -619,8 +624,14 @@ else:
             tickmode='linear',
             side='top'
         ),
-        yaxis=dict(autorange=True),
-        height=2000  # Full view height for world view
+        yaxis=dict(
+            # Set range based on actual data with padding
+            range=[min_y, max_y],
+            # showgrid=True,
+            # showticklabels=True
+        ),
+        height=10000,
+        # margin=dict(t=45, l=50)
     )
     # Reset all nodes to full opacity and original size
     for trace in fig.data:
