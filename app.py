@@ -414,7 +414,7 @@ def create_figure(G, node_positions, nodes_by_level):
                 showticklabels=True,
                 side='top'
             ),
-            yaxis=dict(title=None, showticklabels=False, showgrid=True, zeroline=False),
+            yaxis=dict(title=None, showticklabels=False, showgrid=False, zeroline=False),
             # height=2000
         )
     )
@@ -610,47 +610,182 @@ fig, edge_trace, node_traces = create_figure(G, node_positions, nodes_by_level)
 # Apply search and zoom if search term is provided and not World View
 if final_search_term:
     fig = highlight_and_zoom_to_mentor(fig, G, node_positions, final_search_term, df_track_record)
+    
+    # Regular layout for individual author views
+    fig.update_layout(
+        height=700,  # Standard height for individual views
+        margin=dict(t=45, b=10, l=0, r=0)
+    )
+    
+    # No special CSS needed for individual views
+    st.plotly_chart(
+        fig, 
+        theme=None, 
+        use_container_width=True
+    )
+    
 else:
     # Calculate the min and max y-coordinates from node positions
     y_values = [pos[1] for pos in node_positions.values()]
-    min_y = min(y_values) - 5000  # Add padding below
-    max_y = max(y_values) + 5000  # Add padding above
+    min_y = min(y_values) - 3000  # Add padding below
+    max_y = max(y_values) + 3000  # Add padding above
     
     # Reset to world view settings
     fig.update_layout(
         xaxis=dict(
-            autorange=True,
-            dtick=5,
+            # Set fixed range starting at 1970
+            range=[1971, 2024],  # Adjust end year as needed
+            dtick=5,  # 5-year intervals
             tickmode='linear',
-            side='top'
+            side='top',
+            fixedrange=True  # Lock x-axis from zooming/panning
         ),
         yaxis=dict(
             # Set range based on actual data with padding
             range=[min_y, max_y],
-            # showgrid=True,
-            # showticklabels=True
+            fixedrange=False,  # Allow y-axis to be scrollable
+            scaleanchor=None,  # Unlink x and y axis scaling
         ),
-        height=10000,
-        # margin=dict(t=45, l=50)
+        height=50000,  # Set the total height of the plot
+        dragmode='pan',  # Set default drag mode to pan
+        modebar=dict(
+            orientation='v',
+            bgcolor='rgba(255,255,255,0.7)'
+        )
     )
+    
     # Reset all nodes to full opacity and original size
     for trace in fig.data:
         if hasattr(trace, 'marker'):
             trace.marker.opacity = 1.0
             trace.marker.size = 7
             trace.textfont.color = 'rgba(0,0,0,0)'  # Hide all text in world view
+    
+    # Add repeating x-axis grid lines at regular intervals
+    # Use fixed x-axis range starting at 1970
+    x_min = 1970
+    x_max = 2025
+    
+    # Create repeating x-axis grids every 100000 units in y-direction
+    y_interval = 30000  # Interval for repeating x-axis
+    y_start = min_y + 5000  # Start a bit below the top axis
+    
+    # Calculate how many repeating axes we need
+    num_repeats = int((max_y - y_start) / y_interval) + 1
+    
+    # Add subtle horizontal grid lines at each repeat position
+    for i in range(num_repeats):
+        y_pos = y_start + (i * y_interval)
+        
+        # Skip if we're at the very top (original axis)
+        if y_pos < y_start + 1000:
+            continue
+            
+        # Add a horizontal line to represent the x-axis
+        fig.add_shape(
+            type="line",
+            x0=x_min,
+            y0=y_pos,
+            x1=x_max,
+            y1=y_pos,
+            line=dict(
+                color="rgba(150, 150, 150, 0.3)",  # Subtle color
+                width=1,
+                dash="solid",
+            )
+        )
+        
+        # Add year labels at 5-year intervals
+        for year in range(x_min, x_max + 1, 5):  # Every 5 years
+            fig.add_annotation(
+                x=year,
+                y=y_pos,
+                text=str(year),
+                showarrow=False,
+                font=dict(
+                    size=10,  # Smaller font
+                    color="rgba(100, 100, 100, 0.5)"  # Subtle color
+                ),
+                yshift=10
+            )
 
-# Add custom CSS to remove plot container margins
-st.markdown("""
-    <style>
-    .element-container:has(div.stPlotlyChart) {
-        margin-bottom: -10px !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
+    # Add custom CSS for scrollable container with fixed header - ONLY for World View
+    st.markdown("""
+        <style>
+        /* Create a container with fixed height and scrollable content */
+        .stPlotlyChart {
+            height: 700px !important;  
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            position: relative !important;
+        }
+        
+        /* Make the plot container take the full height */
+        .js-plotly-plot, .plotly, .plot-container {
+            height: 50000px !important;
+        }
+        
+        /* Fix the x-axis at the top */
+        .js-plotly-plot .plotly .main-svg .xaxis {
+            position: sticky !important;
+            top: 0 !important;
+            background-color: #F0F8FF !important;
+            z-index: 1000 !important;
+        }
+        
+        /* Fix the x-axis ticks and labels */
+        .js-plotly-plot .plotly .main-svg .xaxis .xtick,
+        .js-plotly-plot .plotly .main-svg .xaxis .xtitle {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 1000 !important;
+        }
+        
+        /* Create a fixed header background */
+        .js-plotly-plot .plotly:before {
+            content: "";
+            position: sticky;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 50px; /* Adjust based on your x-axis height */
+            background-color: #F0F8FF;
+            z-index: 999;
+        }
+        
+        /* Ensure the plot takes the full width */
+        .js-plotly-plot, .plotly, .plot-container {
+            width: 100% !important;
+        }
+        
+        /* Remove default margins */
+        .element-container:has(div.stPlotlyChart) {
+            margin-bottom: 0 !important;
+        }
+        
+        /* Ensure the main SVG has proper positioning */
+        .js-plotly-plot .plotly .main-svg {
+            overflow: visible !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
-# Display the graph
-st.plotly_chart(fig, theme=None, use_container_width=True)
+    # Display the graph with config options for better scrolling - ONLY for World View
+    st.plotly_chart(
+        fig, 
+        theme=None, 
+        use_container_width=True,
+        config={
+            'scrollZoom': False,  # Disable scroll zoom
+            'displayModeBar': True,
+            'modeBarButtonsToRemove': [
+                'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d',
+                'zoom2d', 'select2d', 'lasso2d'
+            ],  # Remove zoom-related buttons
+            'displaylogo': False,
+            'doubleClick': False  # Disable double-click zoom
+        }
+    )
 
 def calculate_mentorship_stats(G, selected_mentor):
     """Calculate mentorship statistics for the selected mentor."""
