@@ -105,9 +105,11 @@ G, df_track_record = load_data()
 st.markdown("""
 ### Search and Select Author
 
+In this visualization, each dot represents an individual author in the mentorship network. The lines connecting the dots show mentorship relationships - blue lines indicate forward mentorship connections (mentor has earlier first publication than mentee), while orange lines show backward connections (mentee has earlier first publication than mentor). Authors are color-coded by their generation level, from first generation pioneers (red) to seventh generation researchers (brown).
+
 ##### How to use:
-1. Use the dropdown to select an author and zoom into their mentorship network.
-2. Select 'World View' to see the entire mentorship network.
+1. Select 'World View' to see the entire mentorship network.
+2. Use the search bar or dropdown to select an author and zoom into their specific mentorship network.
 3. Drag to zoom into a specific section and hover the mouse over each dot to see detailed information on the author.
 4. Explore the different generation levels and mentorship direction using the color legend below.
 
