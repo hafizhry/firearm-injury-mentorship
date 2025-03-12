@@ -414,8 +414,7 @@ def create_figure(G, node_positions, nodes_by_level):
                 showticklabels=True,
                 side='top'
             ),
-            yaxis=dict(title=None, showticklabels=False, showgrid=True, zeroline=False),
-            # height=2000
+            yaxis=dict(title=None, showticklabels=False, showgrid=False, zeroline=False),
         )
     )
     return fig, [forward_edge_trace, backward_edge_trace], node_traces
@@ -613,13 +612,13 @@ if final_search_term:
 else:
     # Calculate the min and max y-coordinates from node positions
     y_values = [pos[1] for pos in node_positions.values()]
-    min_y = min(y_values) - 5000  # Add padding below
-    max_y = max(y_values) + 5000  # Add padding above
+    min_y = min(y_values) - 3000  # Add padding below
+    max_y = max(y_values) + 3000  # Add padding above
     
     # Reset to world view settings
     fig.update_layout(
         xaxis=dict(
-            autorange=True,
+            range=[1969, 2026],
             dtick=5,
             tickmode='linear',
             side='top'
@@ -630,9 +629,58 @@ else:
             # showgrid=True,
             # showticklabels=True
         ),
-        height=10000,
+        height=20000,
         # margin=dict(t=45, l=50)
     )
+    
+    # Add repeating x-axis grid lines at regular intervals
+    # Set fixed x-axis range starting at 1970
+    x_min = 1965
+    x_max = 2030  # Adjust end year as needed
+    
+    # Create repeating x-axis grids at large intervals
+    y_interval = 30000  # Large interval for repeating x-axis
+    y_start = min_y + 5000  # Start a bit below the top axis
+    
+    # Calculate how many repeating axes we need
+    num_repeats = int((max_y - y_start) / y_interval) + 1
+    
+    # Add subtle horizontal grid lines at each repeat position
+    for i in range(num_repeats):
+        y_pos = y_start + (i * y_interval)
+        
+        # Skip if we're at the very top (original axis)
+        if y_pos < y_start + 1000:
+            continue
+            
+        # Add a horizontal line to represent the x-axis
+        fig.add_shape(
+            type="line",
+            x0=x_min,
+            y0=y_pos,
+            x1=x_max,
+            y1=y_pos,
+            line=dict(
+                color="rgba(150, 150, 150, 0.3)",  # Subtle color
+                width=1,
+                dash="solid",
+            )
+        )
+        
+        # Add year labels at 5-year intervals
+        for year in range(x_min, x_max + 1, 5):  # Every 5 years
+            fig.add_annotation(
+                x=year,
+                y=y_pos,
+                text=str(year),
+                showarrow=False,
+                font=dict(
+                    size=9,  # Smaller font
+                    color="rgba(100, 100, 100, 0.5)"  # Subtle color
+                ),
+                yshift=10
+            )
+    
     # Reset all nodes to full opacity and original size
     for trace in fig.data:
         if hasattr(trace, 'marker'):
