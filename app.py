@@ -636,12 +636,12 @@ else:
     )
     
     # Add repeating x-axis grid lines at regular intervals
-    # Set fixed x-axis range starting at 1970
+    # Set fixed x-axis range starting at 1965
     x_min = 1965
     x_max = 2030  # Adjust end year as needed
     
     # Create repeating x-axis grids at large intervals
-    y_interval = 30000  # Large interval for repeating x-axis
+    y_interval = 40000  # Large interval for repeating x-axis
     y_start = min_y + 5000  # Start a bit below the top axis
     
     # Calculate how many repeating axes we need
