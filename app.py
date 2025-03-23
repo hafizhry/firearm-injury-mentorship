@@ -159,14 +159,26 @@ for i, (level, color) in enumerate(level_colors.items()):
 st.markdown("<div style='flex: 1;'>", unsafe_allow_html=True)
 st.markdown("<p style='font-size: 14px; margin-bottom: 5px; color: #666;'>Lineage Direction:</p>", unsafe_allow_html=True)
 
-# Create a horizontal layout for the edge legend
-edge_cols = st.columns(2)
-for i, (edge_type, color) in enumerate(edge_colors.items()):
+# Create a horizontal layout for the edge legend with 4 types of edges
+edge_types = {
+    'Direct Mentorship (Forward)': {'color': '#1f77b4', 'dash': 'solid'},
+    'Adopted Mentorship (Forward)': {'color': '#1f77b4', 'dash': 'dash'},
+    'Direct Mentorship (Backward)': {'color': 'orange', 'dash': 'solid'},
+    'Adopted Mentorship (Backward)': {'color': 'orange', 'dash': 'dash'}
+}
+
+edge_cols = st.columns(4)
+for i, (edge_type, style) in enumerate(edge_types.items()):
     with edge_cols[i]:
+        # Create the line style based on dash type
+        line_style = f"border-top: 2px {style['dash']} {style['color']};"
+        if style['dash'] == 'dash':
+            line_style = f"border-top: 2px dashed {style['color']};"
+            
         st.markdown(
             f'<div style="display: flex; align-items: center; margin: 2px 0;">'
-            f'<div style="width: 20px; height: 2px; background-color: {color}; margin-right: 6px;"></div>'
-            f'<div style="font-size: 12px; color: #444;">{edge_type}</div>'
+            f'<div style="width: 20px; height: 0px; {line_style} margin-right: 6px;"></div>'
+            f'<div style="font-size: 12px; color: #444; white-space: nowrap;">{edge_type}</div>'
             '</div>',
             unsafe_allow_html=True
         )
@@ -186,7 +198,7 @@ selected_mentor = st.selectbox("Select an author to zoom to or 'World View' to s
 # Use the dropdown selection
 final_search_term = "" if selected_mentor == "World View" else selected_mentor
 
-def compute_sequential_grid_positions(G, grid_spacing=30):
+def compute_sequential_grid_positions(G, grid_spacing=50):
     """
     Compute node positions by processing complete lineages sequentially.
     Each lineage tree gets its own grid space.
@@ -354,7 +366,7 @@ def create_figure(G, node_positions, nodes_by_level):
         mode='lines',
         name='Direct Mentorship (Forward)',
         showlegend=True,
-        opacity=0.7
+        opacity=0.85
     )
     
     forward_adopted_trace = go.Scatter(
@@ -365,7 +377,7 @@ def create_figure(G, node_positions, nodes_by_level):
         mode='lines',
         name='Adopted Mentorship (Forward)',
         showlegend=True,
-        opacity=0.7
+        opacity=0.85
     )
     
     backward_direct_trace = go.Scatter(
@@ -376,7 +388,7 @@ def create_figure(G, node_positions, nodes_by_level):
         mode='lines',
         name='Direct Mentorship (Backward)',
         showlegend=True,
-        opacity=0.7
+        opacity=0.85
     )
     
     backward_adopted_trace = go.Scatter(
@@ -387,7 +399,7 @@ def create_figure(G, node_positions, nodes_by_level):
         mode='lines',
         name='Adopted Mentorship (Backward)',
         showlegend=True,
-        opacity=0.7
+        opacity=0.85
     )
 
     # Create node traces
