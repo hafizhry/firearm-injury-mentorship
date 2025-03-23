@@ -93,7 +93,7 @@ future generations of researchers can build upon their predecessors' work effect
 # Load data from pickle files
 @st.cache_resource
 def load_data():
-    with open(f'source_files/G_v4.pkl', 'rb') as pickle_file:
+    with open(f'source_files/G_v5.pkl', 'rb') as pickle_file:
         G = pickle.load(pickle_file)
 
     with open(f'source_files/df_track_record.pkl', 'rb') as pickle_file:
@@ -284,7 +284,7 @@ node_positions, nodes_by_level = compute_sequential_grid_positions(G)
 
 def create_figure(G, node_positions, nodes_by_level):
     """
-    Create a Plotly figure with colored edges based on temporal direction.
+    Create a Plotly figure with colored edges based on temporal direction and relationship type.
     """
     level_colors = {
         'First Gen': 'red',
@@ -297,54 +297,97 @@ def create_figure(G, node_positions, nodes_by_level):
         'Other': 'grey'
     }
 
+    # Filter out First Gen with no successors if needed
     plot_nodes = [n for n in G.nodes()]
+
     node_attrs = [
         (n, node_positions[n][0], node_positions[n][1], G.nodes[n].get('level', 'Seventh Gen'))
         for n in plot_nodes if n in node_positions
     ]
 
-    # Separate edges by direction
-    forward_edge_x = []
-    forward_edge_y = []
-    backward_edge_x = []
-    backward_edge_y = []
+    # Separate edges by direction and type
+    forward_direct_x = []
+    forward_direct_y = []
+    forward_adopted_x = []
+    forward_adopted_y = []
+    backward_direct_x = []
+    backward_direct_y = []
+    backward_adopted_x = []
+    backward_adopted_y = []
     
-    for u, v in G.edges():
+    for u, v, data in G.edges(data=True):
         if u in node_positions and v in node_positions:
             x0, y0 = node_positions[u]
             x1, y1 = node_positions[v]
             year_u = G.nodes[u]['first_publication_year']
             year_v = G.nodes[v]['first_publication_year']
             
+            # Get relationship type (default to primary/direct if not specified)
+            relationship_type = data.get('relationship_type', 'primary_mentor')
+            
+            # Determine if relationship is adopted (secondary) or direct (primary)
+            is_adopted = relationship_type in ['secondary_mentor', 'adopted_mentorship']
+            is_direct = relationship_type in ['primary_mentor', 'direct_mentorship']
+            
             # If target year is greater than source year, it's forward
             if year_v >= year_u:
-                forward_edge_x.extend([x0, x1, None])
-                forward_edge_y.extend([y0, y1, None])
+                if is_direct or not is_adopted:  # Default to direct if not specified
+                    forward_direct_x.extend([x0, x1, None])
+                    forward_direct_y.extend([y0, y1, None])
+                else:
+                    forward_adopted_x.extend([x0, x1, None])
+                    forward_adopted_y.extend([y0, y1, None])
             else:
-                backward_edge_x.extend([x0, x1, None])
-                backward_edge_y.extend([y0, y1, None])
+                if is_direct or not is_adopted:  # Default to direct if not specified
+                    backward_direct_x.extend([x0, x1, None])
+                    backward_direct_y.extend([y0, y1, None])
+                else:
+                    backward_adopted_x.extend([x0, x1, None])
+                    backward_adopted_y.extend([y0, y1, None])
 
-    # Create separate traces for forward and backward edges
-    forward_edge_trace = go.Scatter(
-        x=forward_edge_x,
-        y=forward_edge_y,
-        line=dict(width=1, color='#1f77b4'),
+    # Create separate traces for each edge type
+    forward_direct_trace = go.Scatter(
+        x=forward_direct_x,
+        y=forward_direct_y,
+        line=dict(width=1.5, color='#1f77b4'),
         hoverinfo='none',
         mode='lines',
-        name='Forward in time',
-        showlegend=False,
-        opacity=0.6
+        name='Direct Mentorship (Forward)',
+        showlegend=True,
+        opacity=0.7
     )
-
-    backward_edge_trace = go.Scatter(
-        x=backward_edge_x,
-        y=backward_edge_y,
-        line=dict(width=1, color='orange'),
+    
+    forward_adopted_trace = go.Scatter(
+        x=forward_adopted_x,
+        y=forward_adopted_y,
+        line=dict(width=1.5, color='#1f77b4', dash='dash'),
         hoverinfo='none',
         mode='lines',
-        name='Backward in time',
-        showlegend=False,
-        opacity=0.6
+        name='Adopted Mentorship (Forward)',
+        showlegend=True,
+        opacity=0.7
+    )
+    
+    backward_direct_trace = go.Scatter(
+        x=backward_direct_x,
+        y=backward_direct_y,
+        line=dict(width=1.5, color='orange'),
+        hoverinfo='none',
+        mode='lines',
+        name='Direct Mentorship (Backward)',
+        showlegend=True,
+        opacity=0.7
+    )
+    
+    backward_adopted_trace = go.Scatter(
+        x=backward_adopted_x,
+        y=backward_adopted_y,
+        line=dict(width=1.5, color='orange', dash='dash'),
+        hoverinfo='none',
+        mode='lines',
+        name='Adopted Mentorship (Backward)',
+        showlegend=True,
+        opacity=0.7
     )
 
     # Create node traces
@@ -362,9 +405,10 @@ def create_figure(G, node_positions, nodes_by_level):
             f"Level: {level}<br>"
             f"First Publication Year: {G.nodes[n].get('first_publication_year', 'Unknown')}<br>"
             f"First Title: {G.nodes[n].get('first_title', 'Unknown')}<br>"
+            f"Publication Type: {G.nodes[n].get('publication_type', 'Unknown')}<br>"
             + (f"Predecessors: {', '.join(list(G.predecessors(n)))}<br>" if list(G.predecessors(n)) else "")
-            # + f"Clusters: {G.nodes[n].get('cluster_keywords', 'Unknown')}<br>"
-            # f"Coordinates: ({x:.2f}, {y:.2f})" # Used for debugging
+            + (f"Clusters: {G.nodes[n].get('cluster_keywords', 'Unknown')}<br>" if G.nodes[n].get('cluster_keywords') else "")
+            + (f"Gender: {G.nodes[n].get('gender', 'Unknown')}" if G.nodes[n].get('gender') else "")
             for (n, x, y) in level_nodes
         ]
 
@@ -373,11 +417,11 @@ def create_figure(G, node_positions, nodes_by_level):
         trace = go.Scatter(
             x=level_node_x,
             y=level_node_y,
-            mode='markers+text',
-            marker=dict(size=10, color=level_colors[level], line_width=1),
+            mode='markers',
+            marker=dict(size=7, color=level_colors[level], line_width=1),
             text=node_names,
             textposition='top center',
-            textfont=dict(size=12, color='rgba(0,0,0,0)'),
+            textfont=dict(size=10, color='rgba(0,0,0,0)'),
             hovertext=level_node_text,
             hoverinfo='text',
             name=level,
@@ -385,8 +429,11 @@ def create_figure(G, node_positions, nodes_by_level):
         )
         node_traces.append(trace)
 
+    # Create a flat list of all traces
+    all_traces = [forward_direct_trace, forward_adopted_trace, backward_direct_trace, backward_adopted_trace] + node_traces
+
     fig = go.Figure(
-        data=[forward_edge_trace, backward_edge_trace] + node_traces,
+        data=all_traces,
         layout=go.Layout(
             showlegend=False,
             hovermode='closest',
@@ -416,10 +463,10 @@ def create_figure(G, node_positions, nodes_by_level):
                 showticklabels=True,
                 side='top'
             ),
-            yaxis=dict(title=None, showticklabels=False, showgrid=False, zeroline=False),
+            yaxis=dict(title=None, showticklabels=False, showgrid=False, zeroline=False)
         )
     )
-    return fig, [forward_edge_trace, backward_edge_trace], node_traces
+    return fig, [forward_direct_trace, forward_adopted_trace, backward_direct_trace, backward_adopted_trace], node_traces
 
 def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_record=None):
     """
@@ -451,8 +498,6 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
     
     # Get position of the selected mentor
     if selected_mentor in node_positions:
-        # center_x, center_y = node_positions[selected_mentor]
-        
         # Calculate the bounds of the lineage
         x_positions = [node_positions[n][0] for n in lineage if n in node_positions]
         y_positions = [node_positions[n][1] for n in lineage if n in node_positions]
@@ -489,9 +534,10 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
             margin=dict(b=0, t=30, l=0, r=0)
         )
         
-        # Highlight the lineage
-        for trace in fig.data:
-            if hasattr(trace, 'marker'):
+        # Process each trace type correctly
+        for i, trace in enumerate(fig.data):
+            # Handle node traces
+            if hasattr(trace, 'marker') and (trace.mode == 'markers' or trace.mode == 'markers+text'):
                 # Get the node positions for this trace
                 node_x = trace.x
                 node_y = trace.y
@@ -502,11 +548,10 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
                 size_list = []
                 text_list = []
                 
-                for i in range(len(node_x)):
-                    # Safely handle None values in node_text
+                for j in range(len(node_x)):
+                    # Get node name
                     try:
-                        node_text_value = node_text[i] if node_text and i < len(node_text) else None
-                        node_name = node_text_value.split('<br>')[0].replace('Node: ', '') if node_text_value else ''
+                        node_name = node_text[j] if node_text and j < len(node_text) else ''
                     except (AttributeError, IndexError):
                         node_name = ''
                         
@@ -525,15 +570,25 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
                 
                 # Update text visibility based on lineage
                 text_colors = []
-                for i in range(len(node_x)):
-                    node_name = trace.text[i] if trace.text and i < len(trace.text) else ''
+                for j in range(len(node_x)):
+                    try:
+                        node_name = node_text[j] if node_text and j < len(node_text) else ''
+                    except (AttributeError, IndexError):
+                        node_name = ''
+                        
                     if node_name in lineage:
                         text_colors.append('black')  # Show text for lineage
                     else:
                         text_colors.append('rgba(0,0,0,0)')  # Hide text for others
                 
+                # Change mode to include text
+                trace.mode = 'markers+text'
+                trace.textposition = 'top center'
                 trace.textfont.color = text_colors
-
+            
+            # All other traces (including edges) - keep them visible
+            # This is important to ensure all lines are shown
+            
         # Add career milestones if df_track_record is provided
         if df_track_record is not None:
             # Filter milestones for the selected mentor
