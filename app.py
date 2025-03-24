@@ -313,7 +313,7 @@ def create_figure(G, node_positions, nodes_by_level):
     plot_nodes = [n for n in G.nodes()]
 
     node_attrs = [
-        (n, node_positions[n][0], node_positions[n][1], G.nodes[n].get('level', 'Seventh Gen'))
+        (n, node_positions[n][0], node_positions[n][1], G.nodes[n].get('level', 'Other'))
         for n in plot_nodes if n in node_positions
     ]
 
@@ -337,9 +337,9 @@ def create_figure(G, node_positions, nodes_by_level):
             # Get relationship type (default to primary/direct if not specified)
             relationship_type = data.get('relationship_type', 'primary_mentor')
             
-            # Determine if relationship is adopted (secondary) or direct (primary)
-            is_adopted = relationship_type in ['secondary_mentor', 'adopted_mentorship']
-            is_direct = relationship_type in ['primary_mentor', 'direct_mentorship']
+            # Determine if relationship is adopted or direct
+            is_adopted = relationship_type in ['adopted_mentorship']
+            is_direct = relationship_type in ['direct_mentorship']
             
             # If target year is greater than source year, it's forward
             if year_v >= year_u:
@@ -417,10 +417,10 @@ def create_figure(G, node_positions, nodes_by_level):
             f"Level: {level}<br>"
             f"First Publication Year: {G.nodes[n].get('first_publication_year', 'Unknown')}<br>"
             f"First Title: {G.nodes[n].get('first_title', 'Unknown')}<br>"
-            f"Publication Type: {G.nodes[n].get('publication_type', 'Unknown')}<br>"
+            # f"Publication Type: {G.nodes[n].get('publication_type', 'Unknown')}<br>"
             + (f"Predecessors: {', '.join(list(G.predecessors(n)))}<br>" if list(G.predecessors(n)) else "")
-            + (f"Clusters: {G.nodes[n].get('cluster_keywords', 'Unknown')}<br>" if G.nodes[n].get('cluster_keywords') else "")
-            + (f"Gender: {G.nodes[n].get('gender', 'Unknown')}" if G.nodes[n].get('gender') else "")
+            # + (f"Clusters: {G.nodes[n].get('cluster_keywords', 'Unknown')}<br>" if G.nodes[n].get('cluster_keywords') else "")
+            # + (f"Gender: {G.nodes[n].get('gender', 'Unknown')}" if G.nodes[n].get('gender') else "")
             for (n, x, y) in level_nodes
         ]
 
