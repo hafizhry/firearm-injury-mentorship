@@ -93,7 +93,7 @@ future generations of researchers can build upon their predecessors' work effect
 # Load data from pickle files
 @st.cache_resource
 def load_data():
-    with open(f'source_files/G_v5.pkl', 'rb') as pickle_file:
+    with open(f'source_files/G_v5.1.pkl', 'rb') as pickle_file:
         G = pickle.load(pickle_file)
 
     with open(f'source_files/df_track_record.pkl', 'rb') as pickle_file:
@@ -102,7 +102,7 @@ def load_data():
 
 G, df_track_record = load_data()
 
-st.markdown("""
+st.markdown(""" 
 ### Search and Select Author
 
 In this visualization, each dot represents an individual author in the mentorship network. The lines connecting the dots show mentorship relationships - blue lines indicate forward mentorship connections (mentor has earlier first publication than mentee), while orange lines show backward connections (mentee has earlier first publication than mentor). Authors are color-coded by their generation level, from first generation pioneers (red) to seventh generation researchers (brown).
@@ -294,9 +294,10 @@ def compute_sequential_grid_positions(G, grid_spacing=50):
 # Execute compute positions
 node_positions, nodes_by_level = compute_sequential_grid_positions(G)
 
-def create_figure(G, node_positions, nodes_by_level):
+def create_figure(G, node_positions, nodes_by_level, selected_mentor=None):
     """
     Create a Plotly figure with colored edges based on temporal direction and relationship type.
+    Annotations for first mentored publications are perpendicular to the dashed lines.
     """
     level_colors = {
         'First Gen': 'red',
@@ -312,6 +313,11 @@ def create_figure(G, node_positions, nodes_by_level):
     # Filter out First Gen with no successors if needed
     plot_nodes = [n for n in G.nodes()]
 
+    # If we have a selected mentor, get their lineage
+    lineage = set()
+    if selected_mentor:
+        lineage = set(nx.ancestors(G, selected_mentor) | nx.descendants(G, selected_mentor) | {selected_mentor})
+
     node_attrs = [
         (n, node_positions[n][0], node_positions[n][1], G.nodes[n].get('level', 'Other'))
         for n in plot_nodes if n in node_positions
@@ -326,13 +332,40 @@ def create_figure(G, node_positions, nodes_by_level):
     backward_direct_y = []
     backward_adopted_x = []
     backward_adopted_y = []
+    # Create a list to store annotation data
+    annotations = []
     
     for u, v, data in G.edges(data=True):
         if u in node_positions and v in node_positions:
+            # Skip annotation creation if not in selected lineage
+            should_annotate = selected_mentor and (u in lineage or v in lineage)
+            
             x0, y0 = node_positions[u]
             x1, y1 = node_positions[v]
             year_u = G.nodes[u]['first_publication_year']
             year_v = G.nodes[v]['first_publication_year']
+            
+            # Calculate vector between points
+            dx = x1 - x0
+            dy = y1 - y0
+            # Calculate length of vector
+            length = (dx**2 + dy**2)**0.5
+            # Fixed gap distance (in years, since x-axis is in years)
+            fixed_gap = 0.8
+            
+            if length > 0:
+                # Normalize the direction vector
+                dx_norm = dx / length
+                dy_norm = dy / length
+                
+                # Calculate new endpoints using fixed gap
+                x0_new = x0 + (dx_norm * fixed_gap)
+                y0_new = y0 + (dy_norm * fixed_gap)
+                x1_new = x1 - (dx_norm * fixed_gap)
+                y1_new = y1 - (dy_norm * fixed_gap)
+            else:
+                x0_new, y0_new = x0, y0
+                x1_new, y1_new = x1, y1
             
             # Get relationship type (default to primary/direct if not specified)
             relationship_type = data.get('relationship_type', 'primary_mentor')
@@ -341,29 +374,90 @@ def create_figure(G, node_positions, nodes_by_level):
             is_adopted = relationship_type in ['adopted_mentorship']
             is_direct = relationship_type in ['direct_mentorship']
             
+            # Calculate midpoint for annotation
+            x_mid = (x0_new + x1_new) / 2
+            y_mid = (y0_new + y1_new) / 2
+            
             # If target year is greater than source year, it's forward
             if year_v >= year_u:
                 if is_direct or not is_adopted:  # Default to direct if not specified
-                    forward_direct_x.extend([x0, x1, None])
-                    forward_direct_y.extend([y0, y1, None])
+                    forward_direct_x.extend([x0_new, x1_new, None])
+                    forward_direct_y.extend([y0_new, y1_new, None])
                 else:
-                    forward_adopted_x.extend([x0, x1, None])
-                    forward_adopted_y.extend([y0, y1, None])
+                    forward_adopted_x.extend([x0_new, x1_new, None])
+                    forward_adopted_y.extend([y0_new, y1_new, None])
+                    # Add first mentored publication info for forward adopted edges
+                    if should_annotate:
+                        first_mentored_pub = G.nodes[v].get('first_mentored_pub', {})
+                        if first_mentored_pub:
+                            # Extract year and title
+                            pub_year = first_mentored_pub.get('pub_year', '')
+                            title = first_mentored_pub.get('title', '')
+                            
+                            # Create text for annotation
+                            text = f"{u} mentored {v} after solo pub ({pub_year})"
+                            
+                            # Add annotation perpendicular to the line
+                            annotations.append({
+                                'x': x_mid,
+                                'y': y_mid,
+                                'text': text,
+                                'showarrow': False,
+                                'textangle': 0,
+                                'font': {'color': '#1f77b4', 'size': 9},
+                                'bgcolor': 'white',
+                                'bordercolor': '#1f77b4',
+                                'borderwidth': 1,
+                                'borderpad': 2,
+                                'opacity': 0.9
+                            })
             else:
                 if is_direct or not is_adopted:  # Default to direct if not specified
-                    backward_direct_x.extend([x0, x1, None])
-                    backward_direct_y.extend([y0, y1, None])
+                    backward_direct_x.extend([x0_new, x1_new, None])
+                    backward_direct_y.extend([y0_new, y1_new, None])
                 else:
-                    backward_adopted_x.extend([x0, x1, None])
-                    backward_adopted_y.extend([y0, y1, None])
+                    backward_adopted_x.extend([x0_new, x1_new, None])
+                    backward_adopted_y.extend([y0_new, y1_new, None])
+                    # Add first mentored publication info for backward adopted edges
+                    if should_annotate:
+                        first_mentored_pub = G.nodes[v].get('first_mentored_pub', {})
+                        if first_mentored_pub:
+                            # Extract year and title
+                            pub_year = first_mentored_pub.get('pub_year', '')
+                            title = first_mentored_pub.get('title', '')
+                            
+                            # Create text for annotation
+                            text = f"{u} mentored {v} after solo pub ({pub_year})"
+                            
+                            # Add annotation perpendicular to the line
+                            annotations.append({
+                                'x': x_mid,
+                                'y': y_mid,
+                                'text': text,
+                                'showarrow': False,
+                                'textangle': 0,
+                                'font': {'color': 'orange', 'size': 9},
+                                'bgcolor': 'white',
+                                'bordercolor': 'orange',
+                                'borderwidth': 1,
+                                'borderpad': 2,
+                                'opacity': 0.9
+                            })
 
     # Create separate traces for each edge type
     forward_direct_trace = go.Scatter(
         x=forward_direct_x,
         y=forward_direct_y,
         line=dict(width=1.5, color='#1f77b4'),
+        marker=dict(
+            size=9,
+            symbol="arrow",
+            angleref="previous",
+            color='#1f77b4',
+            opacity=0.85
+        ),
         hoverinfo='none',
-        mode='lines',
+        mode='lines+markers',
         name='Direct Mentorship (Forward)',
         showlegend=True,
         opacity=0.85
@@ -373,8 +467,15 @@ def create_figure(G, node_positions, nodes_by_level):
         x=forward_adopted_x,
         y=forward_adopted_y,
         line=dict(width=1.5, color='#1f77b4', dash='dash'),
+        marker=dict(
+            size=9,
+            symbol="arrow",
+            angleref="previous",
+            color='#1f77b4',
+            opacity=0.85
+        ),
         hoverinfo='none',
-        mode='lines',
+        mode='lines+markers',
         name='Adopted Mentorship (Forward)',
         showlegend=True,
         opacity=0.85
@@ -384,8 +485,15 @@ def create_figure(G, node_positions, nodes_by_level):
         x=backward_direct_x,
         y=backward_direct_y,
         line=dict(width=1.5, color='orange'),
+        marker=dict(
+            size=9,
+            symbol="arrow",
+            angleref="previous",
+            color='orange',
+            opacity=0.85
+        ),
         hoverinfo='none',
-        mode='lines',
+        mode='lines+markers',
         name='Direct Mentorship (Backward)',
         showlegend=True,
         opacity=0.85
@@ -395,8 +503,15 @@ def create_figure(G, node_positions, nodes_by_level):
         x=backward_adopted_x,
         y=backward_adopted_y,
         line=dict(width=1.5, color='orange', dash='dash'),
+        marker=dict(
+            size=9,
+            symbol="arrow",
+            angleref="previous",
+            color='orange',
+            opacity=0.85
+        ),
         hoverinfo='none',
-        mode='lines',
+        mode='lines+markers',
         name='Adopted Mentorship (Backward)',
         showlegend=True,
         opacity=0.85
@@ -416,11 +531,9 @@ def create_figure(G, node_positions, nodes_by_level):
             f"Node: {n}<br>"
             f"Level: {level}<br>"
             f"First Publication Year: {G.nodes[n].get('first_publication_year', 'Unknown')}<br>"
+            f"First Mentored Pub: {G.nodes[n].get('first_mentored_pub', 'Unknown')}<br>"
             f"First Title: {G.nodes[n].get('first_title', 'Unknown')}<br>"
-            # f"Publication Type: {G.nodes[n].get('publication_type', 'Unknown')}<br>"
             + (f"Predecessors: {', '.join(list(G.predecessors(n)))}<br>" if list(G.predecessors(n)) else "")
-            # + (f"Clusters: {G.nodes[n].get('cluster_keywords', 'Unknown')}<br>" if G.nodes[n].get('cluster_keywords') else "")
-            # + (f"Gender: {G.nodes[n].get('gender', 'Unknown')}" if G.nodes[n].get('gender') else "")
             for (n, x, y) in level_nodes
         ]
 
@@ -430,10 +543,10 @@ def create_figure(G, node_positions, nodes_by_level):
             x=level_node_x,
             y=level_node_y,
             mode='markers',
-            marker=dict(size=7, color=level_colors[level], line_width=1),
+            marker=dict(size=10, color=level_colors[level], line_width=1),
             text=node_names,
             textposition='top center',
-            textfont=dict(size=10, color='rgba(0,0,0,0)'),
+            textfont=dict(size=12, color='rgba(0,0,0,0)'),
             hovertext=level_node_text,
             hoverinfo='text',
             name=level,
@@ -444,6 +557,7 @@ def create_figure(G, node_positions, nodes_by_level):
     # Create a flat list of all traces
     all_traces = [forward_direct_trace, forward_adopted_trace, backward_direct_trace, backward_adopted_trace] + node_traces
 
+    # Create the figure
     fig = go.Figure(
         data=all_traces,
         layout=go.Layout(
@@ -478,6 +592,11 @@ def create_figure(G, node_positions, nodes_by_level):
             yaxis=dict(title=None, showticklabels=False, showgrid=False, zeroline=False)
         )
     )
+    
+    # Add the collected annotations to the figure
+    if annotations:
+        fig.update_layout(annotations=annotations)
+    
     return fig, [forward_direct_trace, forward_adopted_trace, backward_direct_trace, backward_adopted_trace], node_traces
 
 def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_record=None):
@@ -485,6 +604,8 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
     Highlight an author and their lineage, then zoom to their position
     """
     if not search_term:
+        # If in world view, remove all annotations
+        fig.update_layout(annotations=[])
         return fig
     
     # Find matching mentors (case-insensitive partial match)
@@ -673,7 +794,7 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
     return fig
 
 # Create visualization
-fig, edge_trace, node_traces = create_figure(G, node_positions, nodes_by_level)
+fig, edge_trace, node_traces = create_figure(G, node_positions, nodes_by_level, final_search_term)
 
 # Apply search and zoom if search term is provided and not World View
 if final_search_term:
