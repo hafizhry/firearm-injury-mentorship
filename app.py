@@ -351,7 +351,7 @@ def create_figure(G, node_positions, nodes_by_level, selected_mentor=None):
             # Calculate length of vector
             length = (dx**2 + dy**2)**0.5
             # Fixed gap distance (in years, since x-axis is in years)
-            fixed_gap = 0.8
+            fixed_gap = 0.5
             
             if length > 0:
                 # Normalize the direction vector
@@ -395,7 +395,7 @@ def create_figure(G, node_positions, nodes_by_level, selected_mentor=None):
                             title = first_mentored_pub.get('title', '')
                             
                             # Create text for annotation
-                            text = f"{u} mentored {v} after solo pub ({pub_year})"
+                            text = f"{u} mentored {v} in {pub_year} after solo pub"
                             
                             # Add annotation perpendicular to the line
                             annotations.append({
@@ -427,7 +427,7 @@ def create_figure(G, node_positions, nodes_by_level, selected_mentor=None):
                             title = first_mentored_pub.get('title', '')
                             
                             # Create text for annotation
-                            text = f"{u} mentored {v} after solo pub ({pub_year})"
+                            text = f"{u} mentored {v} in {pub_year} after solo pub"
                             
                             # Add annotation perpendicular to the line
                             annotations.append({
