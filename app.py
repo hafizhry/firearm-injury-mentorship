@@ -187,14 +187,52 @@ st.markdown("</div></div>", unsafe_allow_html=True)
 st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
 # Create single column for dropdown
+# Modify the part that creates the author list for the dropdown
+# Replace this code in the app.py file
+
 # Get all author names and sort them
-all_authors = sorted(list(G.nodes()))
+author_lookup = {}
+for n in G.nodes():
+    # Extract the author name without suffixes - use the 'author' attribute
+    author = G.nodes[n].get('author', '')
+    if not author:
+        continue
+        
+    # Get earliest publication year for this author
+    pub_year = G.nodes[n].get('first_publication_year', '')
+    
+    # Only add each author once to the lookup
+    if author not in author_lookup:
+        author_lookup[author] = {
+            'nodes': [],
+            'pub_year': pub_year
+        }
+    else:
+        # Keep track of earliest publication year
+        if pub_year and (not author_lookup[author]['pub_year'] or pub_year < author_lookup[author]['pub_year']):
+            author_lookup[author]['pub_year'] = pub_year
+            
+    # Add this node to the author's node list
+    author_lookup[author]['nodes'].append(n)
 
-# Create the dropdown
-selected_mentor = st.selectbox("Select an author to zoom to or 'World View' to see the entire network", ["World View"] + all_authors, help="Select an author from the dropdown list or 'World View' to see the entire network")
+# Create author options with their earliest publication year
+author_options = [f"{author}" for author, info in author_lookup.items()]
+author_options.sort()  # Sort alphabetically
 
-# Use the dropdown selection
-final_search_term = "" if selected_mentor == "World View" else selected_mentor
+# Create the dropdown - use the new author_options list
+selected_mentor = st.selectbox(
+    "Select an author to zoom to or 'World View' to see the entire network", 
+    ["World View"] + author_options, 
+    help="Select an author from the dropdown list or 'World View' to see the entire network"
+)
+
+# Extract the author name without the publication year
+final_search_term = ""
+if selected_mentor != "World View":
+    author_name = selected_mentor.split(' (')[0]
+    if author_name in author_lookup:
+        # Use the first node for this author to search
+        final_search_term = author_lookup[author_name]['nodes'][0]
 
 # Execute compute positions
 node_positions, nodes_by_level = compute_sequential_grid_positions(G)
@@ -203,8 +241,16 @@ node_positions, nodes_by_level = compute_sequential_grid_positions(G)
 fig, edge_trace, node_traces = create_figure(G, node_positions, nodes_by_level, final_search_term)
 
 # Apply search and zoom if search term is provided and not World View
+# Modify the application of search and zoom
 if final_search_term:
-    fig = highlight_and_zoom_to_mentor(fig, G, node_positions, final_search_term, df_track_record)
+    # First identify the author name for this node
+    author_name = G.nodes[final_search_term].get('author', '')
+    
+    # Find all nodes for this author
+    author_nodes = [n for n in G.nodes() if G.nodes[n].get('author') == author_name]
+    
+    # Highlight and zoom to all nodes for this author
+    fig = highlight_and_zoom_to_mentor(fig, G, node_positions, final_search_term, df_track_record, author_nodes)
 else:
     # Calculate the min and max y-coordinates from node positions
     y_values = [pos[1] for pos in node_positions.values()]

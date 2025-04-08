@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-def compute_sequential_grid_positions(G, grid_spacing=30):
+def compute_sequential_grid_positions(G, grid_spacing=40):
     """
     Compute node positions by processing complete lineages sequentially.
     Each lineage tree gets its own grid space.
@@ -368,9 +368,9 @@ def create_figure(G, node_positions, nodes_by_level, selected_mentor=None):
                 f"Level: {level}<br>"
                 f"First Publication Year: {G.nodes[n].get('first_publication_year', 'Unknown')}<br>"
                 f"First Title: {G.nodes[n].get('first_title', 'Unknown')}<br>"
-                + (f"Predecessors: {', '.join(list(G.predecessors(n)))}<br>" if list(G.predecessors(n)) else "")
-                + (f"Clusters: {G.nodes[n].get('cluster_keywords', 'Unknown')}<br>" if G.nodes[n].get('cluster_keywords') else "")
-                + (f"Gender: {G.nodes[n].get('gender', 'Unknown')}" if G.nodes[n].get('gender') else "")
+                # + (f"Predecessors: {', '.join(list(G.predecessors(n)))}<br>" if list(G.predecessors(n)) else "")
+                # + (f"Clusters: {G.nodes[n].get('cluster_keywords', 'Unknown')}<br>" if G.nodes[n].get('cluster_keywords') else "")
+                # + (f"Gender: {G.nodes[n].get('gender', 'Unknown')}" if G.nodes[n].get('gender') else "")
                 for (n, _, _) in nodes
             ]
 
@@ -651,7 +651,7 @@ def highlight_lineage(fig, G, node_name, node_positions, edge_traces, node_trace
                 symbol=marker_symbol,
                 line=dict(width=2, color='black')
             ),
-            text=[G.nodes[n].get('author', n) for n in type_nodes],
+            text=[G.nodes[n].get('author', '') for n in type_nodes],
             textposition='top center',
             textfont=dict(size=10, color='black'),
             hoverinfo='text',
@@ -733,39 +733,6 @@ def show_lineage(node_name, G=None, node_positions=None, nodes_by_level=None, df
     )
 
     return fig
-
-def show_author_lineage(author_selection, G=None, node_positions=None, nodes_by_level=None, df_track_record=None):
-    """
-    Show the lineage visualization for a selected author
-    """
-    if G is None or node_positions is None:
-        print("Error: Graph or node positions not provided.")
-        return None
-
-    if not author_selection:
-        # Create a new default figure
-        default_fig = create_figure(G, node_positions, nodes_by_level)[0]
-        default_fig.update_layout(
-            autosize=True,
-            width=None,  # Let it fill available width
-            height=900,
-            margin=dict(l=20, r=20, t=100, b=20)
-        )
-        return default_fig
-    
-    # Extract author name from selection (remove publication year)
-    author_name = author_selection.split(' (')[0]
-    
-    # Get all nodes for this author
-    author_nodes = [n for n in G.nodes() if G.nodes[n].get('author') == author_name]
-    
-    if not author_nodes:
-        print(f"No nodes found for author '{author_name}'.")
-        return create_figure(G, node_positions, nodes_by_level)[0]
-    
-    # Create lineage figure with modified highlighting
-    combined_lineage_fig = highlight_author_lineage(G, author_name, author_nodes, node_positions)
-    return combined_lineage_fig
 
 def highlight_author_lineage(G, author_name, author_nodes, node_positions):
     """
@@ -1068,35 +1035,30 @@ def highlight_author_lineage(G, author_name, author_nodes, node_positions):
     
     return fig
 
-def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_record=None):
+def highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_track_record=None, author_nodes=None):
     """
     Highlight an author and their lineage, then zoom to their position
     """
-    if not search_term:
+    if not selected_mentor:
         # If in world view, remove all annotations
         fig.update_layout(annotations=[])
         return fig
     
-    # Find matching mentors (case-insensitive partial match)
-    matching_mentors = [n for n in G.nodes() if search_term.lower() in n.lower()]
+    # Get the author name for the selected mentor
+    author_name = G.nodes[selected_mentor].get('author', '')
     
-    if not matching_mentors:
-        st.warning(f"No mentor found matching '{search_term}'")
-        return fig
+    # If author_nodes not provided, get all nodes for this author
+    if author_nodes is None:
+        author_nodes = [n for n in G.nodes() if G.nodes[n].get('author') == author_name]
     
-    # If multiple matches found, let user select one
-    if len(matching_mentors) > 1:
-        selected_mentor = st.selectbox(
-            "Multiple matches found. Select an author:",
-            matching_mentors
-        )
-    else:
-        selected_mentor = matching_mentors[0]
+    # Get ancestors and descendants for all nodes of this author
+    ancestors = set()
+    descendants = set()
+    for node in author_nodes:
+        ancestors.update(nx.ancestors(G, node))
+        descendants.update(nx.descendants(G, node))
     
-    # Get ancestors and descendants
-    ancestors = list(nx.ancestors(G, selected_mentor))
-    descendants = list(nx.descendants(G, selected_mentor))
-    lineage = ancestors + descendants + [selected_mentor]
+    lineage = list(ancestors.union(descendants).union(set(author_nodes)))
     
     # Get position of the selected mentor
     if selected_mentor in node_positions:
@@ -1143,7 +1105,12 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
                 # Get the node positions for this trace
                 node_x = trace.x
                 node_y = trace.y
-                node_text = trace.text
+                
+                # We need to map these coordinates back to nodes
+                coords_to_nodes = {}
+                for node in G.nodes():
+                    if node in node_positions:
+                        coords_to_nodes[node_positions[node]] = node
                 
                 # Create lists for opacity
                 opacity_list = []
@@ -1151,16 +1118,28 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
                 text_list = []
                 
                 for j in range(len(node_x)):
-                    # Get node name
-                    try:
-                        node_name = node_text[j] if node_text and j < len(node_text) else ''
-                    except (AttributeError, IndexError):
-                        node_name = ''
-                        
+                    # Try to identify which node this is from its coordinates
+                    node_pos = (node_x[j], node_y[j])
+                    node_name = None
+                    
+                    # Look for a node with matching coordinates
+                    for pos, node in coords_to_nodes.items():
+                        if abs(pos[0] - node_pos[0]) < 0.001 and abs(pos[1] - node_pos[1]) < 0.001:
+                            node_name = node
+                            break
+                            
                     if node_name in lineage:
                         opacity_list.append(1.0)
-                        size_list.append(12 if node_name == selected_mentor else 9) 
-                        text_list.append(node_name)  
+                        # Highlight author's own nodes more
+                        if node_name in author_nodes:
+                            size_list.append(12)
+                        else:
+                            size_list.append(9)
+                        # Use author attribute for text, not node name
+                        if node_name:
+                            text_list.append(G.nodes[node_name].get('author', ''))
+                        else:
+                            text_list.append('')
                     else:
                         opacity_list.append(0.2)
                         size_list.append(7)
@@ -1170,31 +1149,35 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
                 trace.marker.opacity = opacity_list
                 trace.marker.size = size_list
                 
-                # Update text visibility based on lineage
+                # Update text visibility
                 text_colors = []
                 for j in range(len(node_x)):
-                    try:
-                        node_name = node_text[j] if node_text and j < len(node_text) else ''
-                    except (AttributeError, IndexError):
-                        node_name = ''
-                        
+                    node_pos = (node_x[j], node_y[j])
+                    node_name = None
+                    
+                    # Look for a node with matching coordinates
+                    for pos, node in coords_to_nodes.items():
+                        if abs(pos[0] - node_pos[0]) < 0.001 and abs(pos[1] - node_pos[1]) < 0.001:
+                            node_name = node
+                            break
+                            
                     if node_name in lineage:
                         text_colors.append('black')  # Show text for lineage
                     else:
                         text_colors.append('rgba(0,0,0,0)')  # Hide text for others
                 
-                # Change mode to include text
+                # Set text values and style
+                trace.text = text_list
                 trace.mode = 'markers+text'
                 trace.textposition = 'top center'
                 trace.textfont.color = text_colors
             
-            # All other traces (including edges) - keep them visible
-            # This is important to ensure all lines are shown
-            
+            # Keep all other traces visible
+        
         # Add career milestones if df_track_record is provided
         if df_track_record is not None:
-            # Filter milestones for the selected mentor
-            df_mentor_milestones = df_track_record[df_track_record['author_name'] == selected_mentor]
+            # Filter milestones for the selected author (using author name)
+            df_mentor_milestones = df_track_record[df_track_record['author_name'] == author_name]
 
             # Get related nodes (lineage)
             related_nodes = lineage
@@ -1254,11 +1237,11 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, search_term, df_track_r
             fig.update_layout(
                 hovermode='closest',
                 hoverdistance=10,
-                # Increase the plot margins to accommodate the extended lines
-                margin=dict(t=60, b=10)  # Added top and bottom margins
+                margin=dict(t=60, b=10)
             )
         
-        st.success(f"Showing lineage for {selected_mentor}")
+        import streamlit as st
+        st.success(f"Showing lineage for {author_name}")
     
     return fig
 
