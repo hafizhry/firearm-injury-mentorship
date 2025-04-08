@@ -270,8 +270,15 @@ def create_figure(G, node_positions, nodes_by_level, selected_mentor=None):
             x=forward_direct_x,
             y=forward_direct_y,
             line=dict(width=1.5, color='#1f77b4'),
+            marker=dict(
+                size=9,
+                symbol="arrow",
+                angleref="previous",
+                color='#1f77b4',
+                opacity=0.85
+            ),
             hoverinfo='none',
-            mode='lines',
+            mode='lines+markers',
             name='Direct Mentorship (Forward)',
             showlegend=False,
             opacity=0.7
@@ -296,8 +303,15 @@ def create_figure(G, node_positions, nodes_by_level, selected_mentor=None):
             x=backward_direct_x,
             y=backward_direct_y,
             line=dict(width=1.5, color='orange'),
+            marker=dict(
+                size=9,
+                symbol="arrow",
+                angleref="previous",
+                color='orange',
+                opacity=0.85
+            ),
             hoverinfo='none',
-            mode='lines',
+            mode='lines+markers',
             name='Direct Mentorship (Backward)',
             showlegend=False,
             opacity=0.7
@@ -868,6 +882,13 @@ def highlight_author_lineage(G, author_name, author_nodes, node_positions):
             x=forward_direct_x,
             y=forward_direct_y,
             line=dict(width=2, color='#1f77b4'),
+            marker=dict(
+                size=9,
+                symbol="arrow",
+                angleref="previous",
+                color='#1f77b4',
+                opacity=0.85
+            ),
             hoverinfo='none',
             mode='lines',
             name='Direct Mentorship (Forward)',
@@ -894,6 +915,13 @@ def highlight_author_lineage(G, author_name, author_nodes, node_positions):
             x=backward_direct_x,
             y=backward_direct_y,
             line=dict(width=2, color='orange'),
+                marker=dict(
+                size=9,
+                symbol="arrow",
+                angleref="previous",
+                color='orange',
+                opacity=0.85
+            ),
             hoverinfo='none',
             mode='lines',
             name='Direct Mentorship (Backward)',

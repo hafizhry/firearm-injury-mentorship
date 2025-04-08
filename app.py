@@ -106,13 +106,23 @@ G, df_track_record = load_data()
 st.markdown(""" 
 ### Search and Select Author
 
-In this visualization, each dot represents an individual author in the mentorship network. The lines connecting the dots show mentorship relationships - blue lines indicate forward mentorship connections (mentor has earlier first publication than mentee), while orange lines show backward connections (mentee has earlier first publication than mentor). Authors are color-coded by their generation level, from first generation pioneers (red) to seventh generation researchers (brown).
+In this visualization, each dot represents a publication by an author in the mentorship network. Authors can have two types of publications: solo publications (hollow circles) and mentored publications (filled circles). The lines connecting dots show mentorship relationships:
+
+- **Blue lines** indicate forward mentorship connections (mentor published earlier than mentee)
+- **Orange lines** indicate backward connections (mentee published earlier than mentor)
+- **Green dotted lines** connect an author's own solo and mentored publications, showing their career progression
+
+Authors are color-coded by their generation level, from first generation pioneers (red) to seventh generation researchers (brown).
 
 ##### How to use:
 1. Select 'World View' to see the entire mentorship network.
-2. Use the search bar or dropdown to select an author and zoom into their specific mentorship network.
-3. Drag to zoom into a specific section and hover the mouse over each dot to see detailed information on the author.
-4. Explore the different generation levels and mentorship direction using the color legend below.
+2. Use the dropdown to select an author and zoom into their complete mentorship network.
+3. When viewing an author's lineage, you'll see:
+   - All publications by the selected author (both solo and mentored)
+   - All their mentors (academic ancestors)
+   - All their mentees (academic descendants)
+4. Hover over any dot to see detailed information about that publication and its author.
+5. The visualization maintains the same author name across all their publications, making it easier to track an individual's research lineage.
 
 """)
 
@@ -159,27 +169,50 @@ st.markdown("<p style='font-size: 14px; margin-bottom: 5px; color: #666;'>Lineag
 
 # Create a horizontal layout for the edge legend with 4 types of edges
 edge_types = {
-    'Direct Mentorship (Forward)': {'color': '#1f77b4', 'dash': 'solid'},
-    'Adopted Mentorship (Forward)': {'color': '#1f77b4', 'dash': 'dash'},
-    'Direct Mentorship (Backward)': {'color': 'orange', 'dash': 'solid'},
-    'Adopted Mentorship (Backward)': {'color': 'orange', 'dash': 'dash'}
+    'Forward Mentorship': {
+        'color': '#1f77b4', 
+        'dash': 'solid',
+        'description': 'Mentor published first, traditional mentorship'
+    },
+    'Backward Mentorship': {
+        'color': 'orange', 
+        'dash': 'solid',
+        'description': 'Mentee published before mentor'
+    },
+    'Author Progression': {
+        'color': 'green',
+        'dash': 'dot',
+        'description': 'Connects an author\'s first solo and first mentored works'
+    }
 }
 
-edge_cols = st.columns(4)
-for i, (edge_type, style) in enumerate(edge_types.items()):
-    with edge_cols[i]:
-        # Create the line style based on dash type
-        line_style = f"border-top: 2px {style['dash']} {style['color']};"
-        if style['dash'] == 'dash':
-            line_style = f"border-top: 2px dashed {style['color']};"
-            
-        st.markdown(
-            f'<div style="display: flex; align-items: center; margin: 2px 0;">'
-            f'<div style="width: 20px; height: 0px; {line_style} margin-right: 6px;"></div>'
-            f'<div style="font-size: 12px; color: #444; white-space: nowrap;">{edge_type}</div>'
-            '</div>',
-            unsafe_allow_html=True
-        )
+# Create three exactly equal columns
+edge_cols = st.columns(3)
+
+# Get the list of items
+edge_items = list(edge_types.items())
+
+# Display each edge type in its own column
+for i in range(3):
+    if i < len(edge_items):
+        edge_type, style = edge_items[i]
+        with edge_cols[i]:
+            # Create the line style based on dash type
+            if style['dash'] == 'solid':
+                line_style = f"border-top: 2px solid {style['color']};"
+            elif style['dash'] == 'dash':
+                line_style = f"border-top: 2px dashed {style['color']};"
+            elif style['dash'] == 'dot':
+                line_style = f"border-top: 2px dotted {style['color']};"
+                
+            st.markdown(
+                f'<div style="display: flex; align-items: center; margin: 2px 0;">'
+                f'<div style="width: 20px; height: 0px; {line_style} margin-right: 6px;"></div>'
+                f'<div style="font-size: 12px; color: #444;">{edge_type}</div>'
+                '</div>'
+                f'<div style="font-size: 11px; color: #666; margin-left: 26px;">{style["description"]}</div>',
+                unsafe_allow_html=True
+            )
 
 st.markdown("</div></div>", unsafe_allow_html=True)
 
