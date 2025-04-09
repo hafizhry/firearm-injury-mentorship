@@ -8,7 +8,7 @@ def compute_sequential_grid_positions(G, grid_spacing=40):
     """
     Compute node positions by processing complete lineages sequentially.
     Each lineage tree gets its own grid space.
-    Places *solo and *_mentored nodes for the same author on the same y-axis.
+    Places *_solo and *_mentored nodes for the same author on the same y-axis.
     """
     node_positions = {}
     nodes_by_level = {
@@ -132,16 +132,10 @@ def compute_sequential_grid_positions(G, grid_spacing=40):
 
     return node_positions, nodes_by_level
 
-def create_figure(G, node_positions, nodes_by_level, selected_mentor=None):
+def create_figure(G, node_positions, selected_mentor=None):
     """
     Create a Plotly figure with colored edges based on temporal direction and relationship type.
     Supports both solo and mentored nodes for the same author on the same y-axis.
-    
-    Args:
-        G: NetworkX graph
-        node_positions: Dictionary of node positions
-        nodes_by_level: Dictionary of nodes grouped by level
-        selected_mentor: Optional selected mentor node to highlight
     """
     level_colors = {
         'First Gen': 'red',
@@ -171,12 +165,8 @@ def create_figure(G, node_positions, nodes_by_level, selected_mentor=None):
     # For solo/mentored connections between the same author, we'll use a special edge type
     forward_direct_x = []
     forward_direct_y = []
-    forward_adopted_x = []
-    forward_adopted_y = []
     backward_direct_x = []
     backward_direct_y = []
-    backward_adopted_x = []
-    backward_adopted_y = []
     self_connection_x = []
     self_connection_y = []
     annotations = []
@@ -199,67 +189,13 @@ def create_figure(G, node_positions, nodes_by_level, selected_mentor=None):
                 self_connection_y.extend([y0, y1, None])
                 continue
 
-            # Get relationship type (default to direct if not specified)
-            relationship_type = data.get('relationship_type', 'direct_mentorship')
-
-            # Determine if relationship is adopted or direct
-            is_adopted = relationship_type in ['secondary_mentor', 'adopted_mentorship', 'self_development']
-
             # If target year is greater than or equal to source year, it's forward
             if year_v >= year_u:
-                if not is_adopted:  # Direct mentorship
-                    forward_direct_x.extend([x0, x1, None])
-                    forward_direct_y.extend([y0, y1, None])
-                else:  # Adopted mentorship
-                    forward_adopted_x.extend([x0, x1, None])
-                    forward_adopted_y.extend([y0, y1, None])
-                    # Add first mentored publication info for forward adopted edges
-                    if selected_mentor and (u in lineage or v in lineage):
-                        first_mentored_pub = G.nodes[v].get('first_mentored_pub', {})
-                        if first_mentored_pub:
-                            pub_year = first_mentored_pub.get('pub_year', '')
-                            title = first_mentored_pub.get('title', '')
-                            text = f"{u} mentored {v} in {pub_year} after solo pub"
-                            annotations.append({
-                                'x': (x0 + x1) / 2,
-                                'y': (y0 + y1) / 2,
-                                'text': text,
-                                'showarrow': False,
-                                'textangle': 0,
-                                'font': {'color': '#1f77b4', 'size': 9},
-                                'bgcolor': 'white',
-                                'bordercolor': '#1f77b4',
-                                'borderwidth': 1,
-                                'borderpad': 2,
-                                'opacity': 0.9
-                            })
+                forward_direct_x.extend([x0, x1, None])
+                forward_direct_y.extend([y0, y1, None])
             else:
-                if not is_adopted:  # Direct mentorship (backward in time)
-                    backward_direct_x.extend([x0, x1, None])
-                    backward_direct_y.extend([y0, y1, None])
-                else:  # Adopted mentorship (backward in time)
-                    backward_adopted_x.extend([x0, x1, None])
-                    backward_adopted_y.extend([y0, y1, None])
-                    # Add first mentored publication info for backward adopted edges
-                    if selected_mentor and (u in lineage or v in lineage):
-                        first_mentored_pub = G.nodes[v].get('first_mentored_pub', {})
-                        if first_mentored_pub:
-                            pub_year = first_mentored_pub.get('pub_year', '')
-                            title = first_mentored_pub.get('title', '')
-                            text = f"{u} mentored {v} in {pub_year} after solo pub"
-                            annotations.append({
-                                'x': (x0 + x1) / 2,
-                                'y': (y0 + y1) / 2,
-                                'text': text,
-                                'showarrow': False,
-                                'textangle': 0,
-                                'font': {'color': 'orange', 'size': 9},
-                                'bgcolor': 'white',
-                                'bordercolor': 'orange',
-                                'borderwidth': 1,
-                                'borderpad': 2,
-                                'opacity': 0.9
-                            })
+                backward_direct_x.extend([x0, x1, None])
+                backward_direct_y.extend([y0, y1, None])
 
     # Create separate traces for each edge type
     edge_traces = []
@@ -284,19 +220,6 @@ def create_figure(G, node_positions, nodes_by_level, selected_mentor=None):
             opacity=0.7
         ))
 
-    # Adopted mentorship (forward)
-    if forward_adopted_x:
-        edge_traces.append(go.Scatter(
-            x=forward_adopted_x,
-            y=forward_adopted_y,
-            line=dict(width=1.5, color='#1f77b4', dash='dash'),
-            hoverinfo='none',
-            mode='lines',
-            name='Adopted Mentorship (Forward)',
-            showlegend=False,
-            opacity=0.7
-        ))
-
     # Direct mentorship (backward)
     if backward_direct_x:
         edge_traces.append(go.Scatter(
@@ -313,19 +236,6 @@ def create_figure(G, node_positions, nodes_by_level, selected_mentor=None):
             hoverinfo='none',
             mode='lines+markers',
             name='Direct Mentorship (Backward)',
-            showlegend=False,
-            opacity=0.7
-        ))
-
-    # Adopted mentorship (backward)
-    if backward_adopted_x:
-        edge_traces.append(go.Scatter(
-            x=backward_adopted_x,
-            y=backward_adopted_y,
-            line=dict(width=1.5, color='orange', dash='dash'),
-            hoverinfo='none',
-            mode='lines',
-            name='Adopted Mentorship (Backward)',
             showlegend=False,
             opacity=0.7
         ))
@@ -427,6 +337,10 @@ def create_figure(G, node_positions, nodes_by_level, selected_mentor=None):
             paper_bgcolor='#F0F8FF',
             plot_bgcolor='#F0F8FF',
             xaxis=dict(
+                title=dict(
+                    text='Year',
+                    font=dict(color='black')
+                ),
                 showgrid=True,
                 gridcolor='lightgrey',
                 gridwidth=0.5,
@@ -448,21 +362,13 @@ def create_figure(G, node_positions, nodes_by_level, selected_mentor=None):
             yaxis=dict(title=None, showticklabels=False, showgrid=False, zeroline=False),
             height=900,
             showlegend=False
-            # legend=dict(
-            #     title="Node Level & Type",
-            #     orientation="h",
-            #     yanchor="top",
-            #     y=1.2,
-            #     xanchor="right",
-            #     x=1
-            # )
         )
     )
-    
+
     # Add the collected annotations to the figure
     if annotations:
         fig.update_layout(annotations=annotations)
-    
+
     return fig, edge_traces, node_traces
 
 def get_lineage_nodes(G, node_name):
@@ -548,8 +454,6 @@ def highlight_lineage(fig, G, node_name, node_positions, edge_traces, node_trace
     # Separate lineage edges by relationship type
     direct_edge_x = []
     direct_edge_y = []
-    adopted_edge_x = []
-    adopted_edge_y = []
     self_edge_x = []
     self_edge_y = []
 
@@ -568,18 +472,8 @@ def highlight_lineage(fig, G, node_name, node_positions, edge_traces, node_trace
                 self_edge_y.extend([y0, y1, None])
                 continue
 
-            # Get relationship type
-            relationship_type = data.get('relationship_type', 'direct_mentorship')
-
-            # Determine if relationship is adopted or direct
-            is_adopted = relationship_type in ['secondary_mentor', 'adopted_mentorship', 'self_development']
-
-            if is_adopted:
-                adopted_edge_x.extend([x0, x1, None])
-                adopted_edge_y.extend([y0, y1, None])
-            else:
-                direct_edge_x.extend([x0, x1, None])
-                direct_edge_y.extend([y0, y1, None])
+            direct_edge_x.extend([x0, x1, None])
+            direct_edge_y.extend([y0, y1, None])
 
     edge_highlight_traces = []
 
@@ -592,18 +486,6 @@ def highlight_lineage(fig, G, node_name, node_positions, edge_traces, node_trace
             hoverinfo='none',
             mode='lines',
             name='Direct Mentorship',
-            showlegend=False
-        ))
-
-    # Adopted mentorship connections (dashed line)
-    if adopted_edge_x:
-        edge_highlight_traces.append(go.Scatter(
-            x=adopted_edge_x,
-            y=adopted_edge_y,
-            line=dict(width=2.5, color='rgba(50, 50, 50, 0.8)', dash='dash'),
-            hoverinfo='none',
-            mode='lines',
-            name='Adopted Mentorship',
             showlegend=False
         ))
 
@@ -715,46 +597,13 @@ def highlight_lineage(fig, G, node_name, node_positions, edge_traces, node_trace
 
     return fig_copy
 
-def show_lineage(node_name, G=None, node_positions=None, nodes_by_level=None, df_track_record=None):
-    """
-    Show the lineage visualization for a selected node
-    Ensures that both solo and mentored nodes for the same author are included
-    """
-    # Handle the case where globals are not provided
-    if G is None or node_positions is None:
-        print("Error: Graph or node positions not provided.")
-        return None
-
-    if not node_name:
-        # Create a new default figure
-        fig, edge_traces, node_traces = create_figure(G, node_positions, nodes_by_level)
-        return fig
-
-    if node_name not in G.nodes():
-        print(f"Node '{node_name}' not found in the graph.")
-        return None
-
-    # Create a base figure first
-    fig, edge_traces, node_traces = create_figure(G, node_positions, nodes_by_level)
-
-    # Highlight the lineage
-    fig = highlight_lineage(fig, G, node_name, node_positions, edge_traces, node_traces)
-
-    # Display
-    fig.update_layout(
-        height=900,
-        # autosize=True
-    )
-
-    return fig
-
 def highlight_author_lineage(G, author_name, author_nodes, node_positions):
     """
     Highlight all nodes and connections for an author in the graph, maintaining original colors 
     and showing author names for ALL related nodes.
     """
     # First, create base figure
-    fig, edge_traces, node_traces = create_figure(G, node_positions, nodes_by_level)
+    fig, edge_traces, node_traces = create_figure(G, node_positions)
     
     # Get all ancestors and descendants (complete lineage)
     combined_ancestors = set()
@@ -826,12 +675,8 @@ def highlight_author_lineage(G, author_name, author_nodes, node_positions):
     # Add edges with original colors - just filter to show only lineage edges
     forward_direct_x = []
     forward_direct_y = []
-    forward_adopted_x = []
-    forward_adopted_y = []
     backward_direct_x = []
     backward_direct_y = []
-    backward_adopted_x = []
-    backward_adopted_y = []
     self_connection_x = []
     self_connection_y = []
     
@@ -853,29 +698,14 @@ def highlight_author_lineage(G, author_name, author_nodes, node_positions):
                 self_connection_y.extend([y0, y1, None])
                 continue
 
-            # Get relationship type (default to direct if not specified)
-            relationship_type = data.get('relationship_type', 'direct_mentorship')
-
-            # Determine if relationship is adopted or direct
-            is_adopted = relationship_type in ['secondary_mentor', 'adopted_mentorship', 'self_development']
-
             # If target year is greater than or equal to source year, it's forward
             if year_v >= year_u:
-                if not is_adopted:  # Direct mentorship
-                    forward_direct_x.extend([x0, x1, None])
-                    forward_direct_y.extend([y0, y1, None])
-                else:  # Adopted mentorship
-                    forward_adopted_x.extend([x0, x1, None])
-                    forward_adopted_y.extend([y0, y1, None])
+                forward_direct_x.extend([x0, x1, None])
+                forward_direct_y.extend([y0, y1, None])
             else:
-                if not is_adopted:  # Direct mentorship (backward in time)
-                    backward_direct_x.extend([x0, x1, None])
-                    backward_direct_y.extend([y0, y1, None])
-                else:  # Adopted mentorship (backward in time)
-                    backward_adopted_x.extend([x0, x1, None])
-                    backward_adopted_y.extend([y0, y1, None])
+                backward_direct_x.extend([x0, x1, None])
+                backward_direct_y.extend([y0, y1, None])
     
-    # Add edge traces with original colors
     # Direct mentorship (forward)
     if forward_direct_x:
         fig.add_trace(go.Scatter(
@@ -896,19 +726,6 @@ def highlight_author_lineage(G, author_name, author_nodes, node_positions):
             opacity=0.7
         ))
 
-    # Adopted mentorship (forward)
-    if forward_adopted_x:
-        fig.add_trace(go.Scatter(
-            x=forward_adopted_x,
-            y=forward_adopted_y,
-            line=dict(width=2, color='#1f77b4', dash='dash'),
-            hoverinfo='none',
-            mode='lines',
-            name='Adopted Mentorship (Forward)',
-            showlegend=False,
-            opacity=0.7
-        ))
-
     # Direct mentorship (backward)
     if backward_direct_x:
         fig.add_trace(go.Scatter(
@@ -925,19 +742,6 @@ def highlight_author_lineage(G, author_name, author_nodes, node_positions):
             hoverinfo='none',
             mode='lines',
             name='Direct Mentorship (Backward)',
-            showlegend=False,
-            opacity=0.7
-        ))
-
-    # Adopted mentorship (backward)
-    if backward_adopted_x:
-        fig.add_trace(go.Scatter(
-            x=backward_adopted_x,
-            y=backward_adopted_y,
-            line=dict(width=2, color='orange', dash='dash'),
-            hoverinfo='none',
-            mode='lines',
-            name='Adopted Mentorship (Backward)',
             showlegend=False,
             opacity=0.7
         ))
@@ -1060,7 +864,7 @@ def highlight_author_lineage(G, author_name, author_nodes, node_positions):
             name=type_name,
             showlegend=False
         ))
-    
+
     return fig
 
 def highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_track_record=None, author_nodes=None):
@@ -1071,45 +875,45 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_tra
         # If in world view, remove all annotations
         fig.update_layout(annotations=[])
         return fig
-    
+
     # Get the author name for the selected mentor
     author_name = G.nodes[selected_mentor].get('author', '')
-    
+
     # If author_nodes not provided, get all nodes for this author
     if author_nodes is None:
         author_nodes = [n for n in G.nodes() if G.nodes[n].get('author') == author_name]
-    
+
     # Get ancestors and descendants for all nodes of this author
     ancestors = set()
     descendants = set()
     for node in author_nodes:
         ancestors.update(nx.ancestors(G, node))
         descendants.update(nx.descendants(G, node))
-    
+
     lineage = list(ancestors.union(descendants).union(set(author_nodes)))
-    
+
     # Get position of the selected mentor
     if selected_mentor in node_positions:
         # Calculate the bounds of the lineage
         x_positions = [node_positions[n][0] for n in lineage if n in node_positions]
         y_positions = [node_positions[n][1] for n in lineage if n in node_positions]
-        
+
         x_min, x_max = min(x_positions), max(x_positions)
         y_min, y_max = min(y_positions), max(y_positions)
-        
+
         # Add padding
-        x_padding = max(10, (x_max - x_min) * 0.4) 
+        x_padding = max(10, (x_max - x_min) * 0.4)
         y_padding = 70
-        
+
         x_range_size = x_max - x_min
         if x_range_size < 100:
             x_center = (x_max + x_min) / 2
-            x_min = x_center - 10  
-            x_max = x_center + 10 
-        
+            x_min = x_center - 10
+            x_max = x_center + 10
+
         x_range = [x_min - x_padding, x_max + x_padding]
         y_range = [y_min - y_padding, y_max + y_padding]
-        
+
         # Update figure layout for zooming
         fig.update_layout(
             xaxis=dict(
@@ -1125,7 +929,7 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_tra
             height=700,
             margin=dict(b=0, t=30, l=0, r=0)
         )
-        
+
         # Process each trace type correctly
         for i, trace in enumerate(fig.data):
             # Handle node traces
@@ -1133,29 +937,29 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_tra
                 # Get the node positions for this trace
                 node_x = trace.x
                 node_y = trace.y
-                
+
                 # We need to map these coordinates back to nodes
                 coords_to_nodes = {}
                 for node in G.nodes():
                     if node in node_positions:
                         coords_to_nodes[node_positions[node]] = node
-                
+
                 # Create lists for opacity
                 opacity_list = []
                 size_list = []
                 text_list = []
-                
+
                 for j in range(len(node_x)):
                     # Try to identify which node this is from its coordinates
                     node_pos = (node_x[j], node_y[j])
                     node_name = None
-                    
+
                     # Look for a node with matching coordinates
                     for pos, node in coords_to_nodes.items():
                         if abs(pos[0] - node_pos[0]) < 0.001 and abs(pos[1] - node_pos[1]) < 0.001:
                             node_name = node
                             break
-                            
+
                     if node_name in lineage:
                         opacity_list.append(1.0)
                         # Highlight author's own nodes more
@@ -1172,36 +976,34 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_tra
                         opacity_list.append(0.2)
                         size_list.append(7)
                         text_list.append('')
-                
+
                 # Update marker properties
                 trace.marker.opacity = opacity_list
                 trace.marker.size = size_list
-                
+
                 # Update text visibility
                 text_colors = []
                 for j in range(len(node_x)):
                     node_pos = (node_x[j], node_y[j])
                     node_name = None
-                    
+
                     # Look for a node with matching coordinates
                     for pos, node in coords_to_nodes.items():
                         if abs(pos[0] - node_pos[0]) < 0.001 and abs(pos[1] - node_pos[1]) < 0.001:
                             node_name = node
                             break
-                            
+
                     if node_name in lineage:
                         text_colors.append('black')  # Show text for lineage
                     else:
                         text_colors.append('rgba(0,0,0,0)')  # Hide text for others
-                
+
                 # Set text values and style
                 trace.text = text_list
                 trace.mode = 'markers+text'
                 trace.textposition = 'top center'
                 trace.textfont.color = text_colors
-            
-            # Keep all other traces visible
-        
+
         # Add career milestones if df_track_record is provided
         if df_track_record is not None:
             # Filter milestones for the selected author (using author name)
@@ -1220,7 +1022,7 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_tra
             # Determine the y-position of the last node
             last_gen_y_position = [
                 node_positions[n][1] for n in related_nodes
-                if G.nodes[n].get('level') in ['Seventh Gen', 'Sixth Gen', 'Fifth Gen', 'Fourth Gen', 'Third Gen', 'Second Gen'] 
+                if G.nodes[n].get('level') in ['Seventh Gen', 'Sixth Gen', 'Fifth Gen', 'Fourth Gen', 'Third Gen', 'Second Gen']
                 and n in node_positions
             ]
             last_gen_y_end = max(last_gen_y_position) if last_gen_y_position else max(node_positions.values(), key=lambda v: v[1])[1]
@@ -1232,9 +1034,9 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_tra
                 institution_source = milestone['institution_source']
 
                 # Create hover points at intervals along the line
-                num_points = 50  
-                y_start = first_gen_y_start - 50  
-                y_end = last_gen_y_end + 50      
+                num_points = 50
+                y_start = first_gen_y_start - 50
+                y_end = last_gen_y_end + 50
                 y_points = np.linspace(y_start, y_end, num_points)
                 x_points = [start_year] * num_points
 
@@ -1245,7 +1047,7 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_tra
                     line=dict(
                         color="gray",
                         dash="dash",
-                        width=2  
+                        width=2
                     ),
                     marker=dict(
                         size=0,
@@ -1267,10 +1069,10 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_tra
                 hoverdistance=10,
                 margin=dict(t=60, b=10)
             )
-        
+
         import streamlit as st
         st.success(f"Showing lineage for {author_name}")
-    
+
     return fig
 
 def calculate_mentorship_stats(G, selected_mentor):
@@ -1278,11 +1080,11 @@ def calculate_mentorship_stats(G, selected_mentor):
     # Get all descendants
     descendants = list(nx.descendants(G, selected_mentor))
     total_descendants = len(descendants)
-    
+
     # Calculate branching factor
     direct_mentees = list(G.successors(selected_mentor))
     branching_factor = len(direct_mentees)
-    
+
     # Calculate lineage depth
     def get_max_depth(node, current_depth=0, visited=None):
         if visited is None:
@@ -1294,16 +1096,16 @@ def calculate_mentorship_stats(G, selected_mentor):
         if not successors:
             return current_depth
         return max(get_max_depth(successor, current_depth + 1, visited) for successor in successors)
-    
+
     lineage_depth = get_max_depth(selected_mentor)
-    
+
     # Calculate average time gap between generations
     time_gaps = []
     mentor_year = G.nodes[selected_mentor].get('first_publication_year')
-    
+
     # Collect all mentee years for mentoring span calculation
     mentee_years = []
-    
+
     # First check direct mentees
     for mentee in direct_mentees:
         mentee_year = G.nodes[mentee].get('first_publication_year')
@@ -1312,7 +1114,7 @@ def calculate_mentorship_stats(G, selected_mentor):
         if mentee_year and mentor_year and isinstance(mentee_year, (int, float)) and isinstance(mentor_year, (int, float)):
             gap = mentee_year - mentor_year
             time_gaps.append(gap)
-    
+
     # Then check all other mentor-mentee relationships in the lineage
     for node in descendants:
         predecessors = list(G.predecessors(node))
@@ -1325,23 +1127,23 @@ def calculate_mentorship_stats(G, selected_mentor):
                     time_gaps.append(gap)
                 if mentee_year and isinstance(mentee_year, (int, float)):
                     mentee_years.append(mentee_year)
-    
+
     # Calculate mentoring span
     if mentee_years:
         mentoring_span = max(mentee_years) - min(mentee_years)
     else:
         mentoring_span = None
-    
+
     # Calculate average time gap
     if time_gaps:
         avg_time_gap = round(sum(time_gaps) / len(time_gaps), 1)
     else:
         avg_time_gap = None
-    
+
     return {
         'total_descendants': total_descendants,
         'branching_factor': branching_factor,
         'lineage_depth': lineage_depth,
         'avg_time_gap': avg_time_gap if avg_time_gap is not None else "N/A",
         'mentoring_span': mentoring_span if mentoring_span is not None else "N/A"
-    } 
+    }

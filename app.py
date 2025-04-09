@@ -1,13 +1,8 @@
 # app.py
 
 import streamlit as st
-import pandas as pd
-import networkx as nx
-import plotly.graph_objects as go
-import numpy as np
 import pickle
 import base64
-from pathlib import Path
 from visualization_utils import compute_sequential_grid_positions, create_figure, highlight_and_zoom_to_mentor, calculate_mentorship_stats
 
 # Set page config
@@ -110,7 +105,7 @@ In this visualization, each dot represents a publication by an author in the men
 
 - **Blue lines** indicate forward mentorship connections (mentor published earlier than mentee)
 - **Orange lines** indicate backward connections (mentee published earlier than mentor)
-- **Green dotted lines** connect an author's own solo and mentored publications, showing their career progression
+- **Green dotted lines** connect an author's first solo publication to the first mentored publication, showing their career progression
 
 Authors are color-coded by their generation level, from first generation pioneers (red) to seventh generation researchers (brown).
 
@@ -186,7 +181,7 @@ edge_types = {
     }
 }
 
-# Create three exactly equal columns
+# Create three columns
 edge_cols = st.columns(3)
 
 # Get the list of items
@@ -204,7 +199,7 @@ for i in range(3):
                 line_style = f"border-top: 2px dashed {style['color']};"
             elif style['dash'] == 'dot':
                 line_style = f"border-top: 2px dotted {style['color']};"
-                
+
             st.markdown(
                 f'<div style="display: flex; align-items: center; margin: 2px 0;">'
                 f'<div style="width: 20px; height: 0px; {line_style} margin-right: 6px;"></div>'
@@ -219,10 +214,6 @@ st.markdown("</div></div>", unsafe_allow_html=True)
 # Add a small space after the legend
 st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
-# Create single column for dropdown
-# Modify the part that creates the author list for the dropdown
-# Replace this code in the app.py file
-
 # Get all author names and sort them
 author_lookup = {}
 for n in G.nodes():
@@ -230,10 +221,10 @@ for n in G.nodes():
     author = G.nodes[n].get('author', '')
     if not author:
         continue
-        
+
     # Get earliest publication year for this author
     pub_year = G.nodes[n].get('first_publication_year', '')
-    
+
     # Only add each author once to the lookup
     if author not in author_lookup:
         author_lookup[author] = {
@@ -244,7 +235,7 @@ for n in G.nodes():
         # Keep track of earliest publication year
         if pub_year and (not author_lookup[author]['pub_year'] or pub_year < author_lookup[author]['pub_year']):
             author_lookup[author]['pub_year'] = pub_year
-            
+
     # Add this node to the author's node list
     author_lookup[author]['nodes'].append(n)
 
@@ -254,8 +245,8 @@ author_options.sort()  # Sort alphabetically
 
 # Create the dropdown - use the new author_options list
 selected_mentor = st.selectbox(
-    "Select an author to zoom to or 'World View' to see the entire network", 
-    ["World View"] + author_options, 
+    "Select an author to zoom to or 'World View' to see the entire network",
+    ["World View"] + author_options,
     help="Select an author from the dropdown list or 'World View' to see the entire network"
 )
 
@@ -271,25 +262,24 @@ if selected_mentor != "World View":
 node_positions, nodes_by_level = compute_sequential_grid_positions(G)
 
 # Create visualization
-fig, edge_trace, node_traces = create_figure(G, node_positions, nodes_by_level, final_search_term)
+fig, edge_trace, node_traces = create_figure(G, node_positions, final_search_term)
 
 # Apply search and zoom if search term is provided and not World View
-# Modify the application of search and zoom
 if final_search_term:
     # First identify the author name for this node
     author_name = G.nodes[final_search_term].get('author', '')
-    
+
     # Find all nodes for this author
     author_nodes = [n for n in G.nodes() if G.nodes[n].get('author') == author_name]
-    
+
     # Highlight and zoom to all nodes for this author
     fig = highlight_and_zoom_to_mentor(fig, G, node_positions, final_search_term, df_track_record, author_nodes)
 else:
     # Calculate the min and max y-coordinates from node positions
     y_values = [pos[1] for pos in node_positions.values()]
-    min_y = min(y_values) - 3000  # Add padding below
-    max_y = max(y_values) + 3000  # Add padding above
-    
+    min_y = min(y_values) - 3000  # Add padding below the graph
+    max_y = max(y_values) + 3000  # Add padding above the graph
+
     # Reset to world view settings
     fig.update_layout(
         xaxis=dict(
@@ -299,7 +289,6 @@ else:
             side='top'
         ),
         yaxis=dict(
-            # Set range based on actual data with padding
             range=[min_y, max_y],
             # showgrid=True,
             # showticklabels=True
@@ -307,27 +296,27 @@ else:
         height=20000,
         # margin=dict(t=45, l=50)
     )
-    
+
     # Add repeating x-axis grid lines at regular intervals
-    # Set fixed x-axis range starting at 1965
+    # Set fixed x-axis range
     x_min = 1965
-    x_max = 2030  # Adjust end year as needed
-    
+    x_max = 2030
+
     # Create repeating x-axis grids at large intervals
     y_interval = 40000  # Large interval for repeating x-axis
     y_start = min_y + 5000  # Start a bit below the top axis
-    
+
     # Calculate how many repeating axes we need
     num_repeats = int((max_y - y_start) / y_interval) + 1
-    
+
     # Add subtle horizontal grid lines at each repeat position
     for i in range(num_repeats):
         y_pos = y_start + (i * y_interval)
-        
+
         # Skip if we're at the very top (original axis)
         if y_pos < y_start + 1000:
             continue
-            
+
         # Add a horizontal line to represent the x-axis
         fig.add_shape(
             type="line",
@@ -341,7 +330,7 @@ else:
                 dash="solid",
             )
         )
-        
+
         # Add year labels at 5-year intervals
         for year in range(x_min, x_max + 1, 5):  # Every 5 years
             fig.add_annotation(
@@ -355,7 +344,7 @@ else:
                 ),
                 yshift=10
             )
-    
+
     # Reset all nodes to full opacity and original size
     for trace in fig.data:
         if hasattr(trace, 'marker'):
@@ -378,13 +367,13 @@ st.plotly_chart(fig, theme=None, use_container_width=True)
 # After the plotly chart display, add the statistics section
 if final_search_term and final_search_term != "World View":
     st.markdown('<h3 style="margin: 0 0 10px 0; text-align: center;">Mentorship Tree Statistics</h3>', unsafe_allow_html=True)
-    
+
     # Calculate statistics
     stats = calculate_mentorship_stats(G, final_search_term)
-    
+
     # Create five columns for the statistics
     col1, col2, col3, col4, col5 = st.columns(5)
-    
+
     # Custom CSS for the metric cards
     st.markdown("""
         <style>
@@ -415,7 +404,7 @@ if final_search_term and final_search_term != "World View":
         }
         </style>
     """, unsafe_allow_html=True)
-    
+
     # Display statistics in cards
     with col1:
         st.markdown(f"""
@@ -424,7 +413,7 @@ if final_search_term and final_search_term != "World View":
                 <div class="metric-label">Total Academic Descendants<br>(Direct + Indirect Mentees)</div>
             </div>
         """, unsafe_allow_html=True)
-    
+
     with col2:
         st.markdown(f"""
             <div class="metric-card">
@@ -432,7 +421,7 @@ if final_search_term and final_search_term != "World View":
                 <div class="metric-label">Direct Mentees<br>(First-degree Connections)</div>
             </div>
         """, unsafe_allow_html=True)
-    
+
     with col3:
         st.markdown(f"""
             <div class="metric-card">
@@ -440,7 +429,7 @@ if final_search_term and final_search_term != "World View":
                 <div class="metric-label">Lineage Depth<br>(Maximum Generations)</div>
             </div>
         """, unsafe_allow_html=True)
-    
+
     with col4:
         st.markdown(f"""
             <div class="metric-card">
@@ -448,7 +437,7 @@ if final_search_term and final_search_term != "World View":
                 <div class="metric-label">Average Time Gap<br>(Years Between Generations)</div>
             </div>
         """, unsafe_allow_html=True)
-    
+
     with col5:
         st.markdown(f"""
             <div class="metric-card">
