@@ -162,14 +162,15 @@ def create_figure(G, node_positions, selected_mentor=None):
     ]
 
     # Separate edges by relationship type and direction
-    # For solo/mentored connections between the same author, we'll use a special edge type
     forward_direct_x = []
     forward_direct_y = []
     backward_direct_x = []
     backward_direct_y = []
+
+    # Keep separate lists for self-connections
     self_connection_x = []
     self_connection_y = []
-    annotations = []
+    self_connection_hover = []
 
     for u, v, data in G.edges(data=True):
         if u in node_positions and v in node_positions:
@@ -184,9 +185,41 @@ def create_figure(G, node_positions, selected_mentor=None):
             is_self_connection = u_author and v_author and u_author == v_author
 
             if is_self_connection:
-                # Special styling for connections between an author's own nodes
+                # Determine which node is solo and which is mentored
+                if G.nodes[u].get('type') == 'solo_publication' and G.nodes[v].get('type') == 'mentored_publication':
+                    solo_node = u
+                    mentored_node = v
+                elif G.nodes[v].get('type') == 'solo_publication' and G.nodes[u].get('type') == 'mentored_publication':
+                    solo_node = v
+                    mentored_node = u
+                else:
+                    # If types can't be determined, just continue
+                    continue
+
+                author_name = u_author  # The author's name
+
+                # Get the mentors from the mentored node's predecessors
+                mentors = []
+                for pred in G.predecessors(mentored_node):
+                    # Skip if it's the author's own solo node or self
+                    if pred != solo_node and G.nodes[pred].get('author') != author_name:
+                        mentor_name = G.nodes[pred].get('author', 'Unknown')
+                        mentors.append(mentor_name)
+
+                # Create hover text
+                solo_year = G.nodes[solo_node].get('first_publication_year', 'Unknown')
+                mentored_year = G.nodes[mentored_node].get('first_publication_year', 'Unknown')
+
+                if mentors:
+                    hover_text = f"{author_name} made self progression from solo authoring ({solo_year}) to be mentored by {', '.join(mentors)} ({mentored_year})"
+                else:
+                    hover_text = f"{author_name} made self progression from solo authoring ({solo_year}) to be mentored ({mentored_year})"
+
+                # Store the self-connection for later
                 self_connection_x.extend([x0, x1, None])
                 self_connection_y.extend([y0, y1, None])
+                self_connection_hover.extend([hover_text, hover_text, None])
+
                 continue
 
             # If target year is greater than or equal to source year, it's forward
@@ -240,19 +273,6 @@ def create_figure(G, node_positions, selected_mentor=None):
             opacity=0.7
         ))
 
-    # Self connections (solo to mentored)
-    if self_connection_x:
-        edge_traces.append(go.Scatter(
-            x=self_connection_x,
-            y=self_connection_y,
-            line=dict(width=1.5, color='green', dash='dot'),
-            hoverinfo='none',
-            mode='lines',
-            name='Author Development (Solo→Mentored)',
-            showlegend=False,
-            opacity=0.7
-        ))
-
     # Create node traces
     all_levels = ['First Gen', 'Second Gen', 'Third Gen', 'Fourth Gen', 'Fifth Gen', 'Sixth Gen', 'Seventh Gen', 'Other']
     node_traces = []
@@ -288,13 +308,10 @@ def create_figure(G, node_positions, selected_mentor=None):
             # Create hover text with relevant node info
             node_text = [
                 f"Author: {G.nodes[n].get('author', 'Unknown')}<br>"
-                f"Node Type: {G.nodes[n].get('type', 'Unknown')}<br>"
-                f"Level: {level}<br>"
-                f"First Publication Year: {G.nodes[n].get('first_publication_year', 'Unknown')}<br>"
-                f"First Title: {G.nodes[n].get('first_title', 'Unknown')}<br>"
-                # + (f"Predecessors: {', '.join(list(G.predecessors(n)))}<br>" if list(G.predecessors(n)) else "")
-                # + (f"Clusters: {G.nodes[n].get('cluster_keywords', 'Unknown')}<br>" if G.nodes[n].get('cluster_keywords') else "")
-                # + (f"Gender: {G.nodes[n].get('gender', 'Unknown')}" if G.nodes[n].get('gender') else "")
+                f"Publication Type: {G.nodes[n].get('type', 'Unknown').replace('_', ' ').title()}<br>"
+                f"Generation: {level}<br>"
+                f"Publication Year: {G.nodes[n].get('first_publication_year', 'Unknown')}<br>"
+                f"Title: {G.nodes[n].get('first_title', 'Unknown')}"
                 for (n, _, _) in nodes
             ]
 
@@ -316,7 +333,7 @@ def create_figure(G, node_positions, selected_mentor=None):
                     line_width=1,
                     opacity=opacity
                 ),
-                text=[n for (n, _, _) in nodes],
+                text=[G.nodes[n].get('author', '') for (n, _, _) in nodes],  # Use author names for text
                 textposition='top center',
                 textfont=dict(size=10, color='rgba(0,0,0,0)'),
                 hovertext=node_text,
@@ -329,6 +346,7 @@ def create_figure(G, node_positions, selected_mentor=None):
     # Create a flat list of all traces
     all_traces = edge_traces + node_traces
 
+    # Create the figure
     fig = go.Figure(
         data=all_traces,
         layout=go.Layout(
@@ -338,7 +356,7 @@ def create_figure(G, node_positions, selected_mentor=None):
             plot_bgcolor='#F0F8FF',
             xaxis=dict(
                 title=dict(
-                    text='Year',
+                    text='Publication Year',
                     font=dict(color='black')
                 ),
                 showgrid=True,
@@ -365,507 +383,94 @@ def create_figure(G, node_positions, selected_mentor=None):
         )
     )
 
-    # Add the collected annotations to the figure
-    if annotations:
-        fig.update_layout(annotations=annotations)
-
-    return fig, edge_traces, node_traces
-
-def get_lineage_nodes(G, node_name):
-    """
-    Get the ancestors and descendants of a node in the graph.
-    Also include nodes from the same author.
-    """
-    ancestors = list(nx.ancestors(G, node_name))
-    descendants = list(nx.descendants(G, node_name))
-
-    # Include all nodes from the same author
-    same_author_nodes = []
-    selected_author = G.nodes[node_name].get('author')
-    if selected_author:
-        for node in G.nodes():
-            if node != node_name and G.nodes[node].get('author') == selected_author:
-                same_author_nodes.append(node)
-
-    lineage_nodes = ancestors + descendants + [node_name] + same_author_nodes
-    return ancestors, descendants, lineage_nodes
-
-def highlight_lineage(fig, G, node_name, node_positions, edge_traces, node_traces):
-    """
-    Highlight the lineage of a node in the graph.
-    Ensures that both solo and mentored nodes for the same author are highlighted.
-    """
-    ancestors, descendants, lineage = get_lineage_nodes(G, node_name)
-
-    if node_name not in node_positions:
-        print(f"Node '{node_name}' position not found.")
-        return fig
-
-    # Create a new figure based on the current one
-    fig_copy = go.Figure(fig)
-
-    # Calculate the bounds of the lineage
-    x_positions = [node_positions[n][0] for n in lineage if n in node_positions]
-    y_positions = [node_positions[n][1] for n in lineage if n in node_positions]
-
-    if not x_positions or not y_positions:
-        print(f"No position data for lineage of {node_name}")
-        return fig
-
-    x_min, x_max = min(x_positions), max(x_positions)
-    y_min, y_max = min(y_positions), max(y_positions)
-
-    # Add padding
-    x_padding = max(10, (x_max - x_min) * 0.4)
-    y_padding = 50
-
-    x_range_size = x_max - x_min
-    if x_range_size < 100:
-        x_center = (x_max + x_min) / 2
-        x_min = x_center - 10
-        x_max = x_center + 10
-
-    x_range = [x_min - x_padding, x_max + x_padding]
-    y_range = [y_min - y_padding, y_max + y_padding]
-
-    # Update figure layout for zooming
-    fig_copy.update_layout(
-        title=dict(
-            text=f"Lineage of '{G.nodes[node_name].get('author', node_name)}'",
-            x=0.5,
-            y=0.98,
-            xanchor='center',
-            yanchor='top',
-            font=dict(size=20)
-        ),
-        xaxis=dict(
-            range=x_range,
-            dtick=2,
-            tickmode='linear',
-            gridcolor='lightgrey',
-            side='top'
-        ),
-        yaxis=dict(
-            range=y_range,
-        ),
-        height=900
-    )
-
-    # Separate lineage edges by relationship type
-    direct_edge_x = []
-    direct_edge_y = []
-    self_edge_x = []
-    self_edge_y = []
-
-    for u, v, data in G.edges(data=True):
-        if u in lineage and v in lineage and u in node_positions and v in node_positions:
-            x0, y0 = node_positions[u]
-            x1, y1 = node_positions[v]
-
-            # Check if this is a self-connection (same author)
-            u_author = G.nodes[u].get('author')
-            v_author = G.nodes[v].get('author')
-            is_self_connection = u_author and v_author and u_author == v_author
-
-            if is_self_connection:
-                self_edge_x.extend([x0, x1, None])
-                self_edge_y.extend([y0, y1, None])
-                continue
-
-            direct_edge_x.extend([x0, x1, None])
-            direct_edge_y.extend([y0, y1, None])
-
-    edge_highlight_traces = []
-
-    # Direct mentorship connections (solid line)
-    if direct_edge_x:
-        edge_highlight_traces.append(go.Scatter(
-            x=direct_edge_x,
-            y=direct_edge_y,
-            line=dict(width=2.5, color='rgba(50, 50, 50, 0.9)'),
-            hoverinfo='none',
-            mode='lines',
-            name='Direct Mentorship',
-            showlegend=False
-        ))
-
-    # Self connections (solo to mentored)
-    if self_edge_x:
-        edge_highlight_traces.append(go.Scatter(
-            x=self_edge_x,
-            y=self_edge_y,
-            line=dict(width=2.5, color='green', dash='dot'),
-            hoverinfo='none',
-            mode='lines',
-            name='Author Development',
-            showlegend=False
-        ))
-
-    # Create node hover text
-    node_shapes = {
-        'solo_publication': 'circle-open',
-        'mentored_publication': 'circle'
-    }
-
-    # Highlighted nodes
-    level_node_x = [node_positions[n][0] for n in lineage if n in node_positions]
-    level_node_y = [node_positions[n][1] for n in lineage if n in node_positions]
-
-    level_colors = {
-        'First Gen': 'red',
-        'Second Gen': 'blue',
-        'Third Gen': 'green',
-        'Fourth Gen': 'purple',
-        'Fifth Gen': 'orange',
-        'Sixth Gen': 'pink',
-        'Seventh Gen': 'brown',
-        'Other': 'grey'
-    }
-
-    # Group lineage nodes by type
-    for node_type in ['solo_publication', 'mentored_publication', None]:
-        type_nodes = [n for n in lineage if n in node_positions and
-                    G.nodes[n].get('type') == node_type or
-                    (node_type is None and G.nodes[n].get('type') not in ['solo_publication', 'mentored_publication'])]
-
-        if not type_nodes:
-            continue
-
-        node_x = [node_positions[n][0] for n in type_nodes]
-        node_y = [node_positions[n][1] for n in type_nodes]
-
-        marker_symbol = node_shapes.get(node_type, 'circle')
-        type_name = f"{node_type.replace('_', ' ').title()} Nodes" if node_type else "Other Nodes"
-
-        trace = go.Scatter(
-            x=node_x,
-            y=node_y,
-            mode='markers+text',
-            marker=dict(
-                size=10,
-                color=[level_colors.get(G.nodes[n].get('level', 'Other'), 'grey') for n in type_nodes],
-                symbol=marker_symbol,
-                line=dict(width=2, color='black')
-            ),
-            text=[G.nodes[n].get('author', '') for n in type_nodes],
-            textposition='top center',
-            textfont=dict(size=10, color='black'),
-            hoverinfo='text',
-            hovertext=[
-                f"Author: {G.nodes[n].get('author', 'Unknown')}<br>"
-                f"Node Type: {G.nodes[n].get('type', 'Unknown')}<br>"
-                f"Level: {G.nodes[n].get('level', 'Unknown')}<br>"
-                f"First Publication Year: {G.nodes[n].get('first_publication_year', 'Unknown')}<br>"
-                + (f"Predecessors: {', '.join(list(G.predecessors(n)))}<br>" if list(G.predecessors(n)) else "")
-                for n in type_nodes
-            ],
-            name=type_name,
-            showlegend=False
-        )
-        fig_copy.add_trace(trace)
-
-    # Highlight the selected node specially
-    selected_node_trace = go.Scatter(
-        x=[node_positions[node_name][0]],
-        y=[node_positions[node_name][1]],
-        mode='markers',
-        marker=dict(
-            size=15,
-            color='yellow',
-            symbol=node_shapes.get(G.nodes[node_name].get('type'), 'circle'),
-            line=dict(width=3, color='black')
-        ),
-        hoverinfo='text',
-        hovertext=[
-            f"SELECTED: {G.nodes[node_name].get('author', node_name)}<br>"
-            f"Node Type: {G.nodes[node_name].get('type', 'Unknown')}<br>"
-            f"Level: {G.nodes[node_name].get('level', 'Unknown')}<br>"
-            f"First Publication Year: {G.nodes[node_name].get('first_publication_year', 'Unknown')}"
-        ],
-        name="Selected Node",
-        showlegend=False
-    )
-
-    # Add all the traces to the figure
-    for trace in edge_highlight_traces:
-        fig_copy.add_trace(trace)
-
-    fig_copy.add_trace(selected_node_trace)
-
-    print(f"Showing lineage for {node_name} (Author: {G.nodes[node_name].get('author', 'Unknown')})")
-    print(f"Ancestors: {len(ancestors)}, Descendants: {len(descendants)}, Total lineage: {len(lineage)}")
-
-    return fig_copy
-
-def highlight_author_lineage(G, author_name, author_nodes, node_positions):
-    """
-    Highlight all nodes and connections for an author in the graph, maintaining original colors 
-    and showing author names for ALL related nodes.
-    """
-    # First, create base figure
-    fig, edge_traces, node_traces = create_figure(G, node_positions)
-    
-    # Get all ancestors and descendants (complete lineage)
-    combined_ancestors = set()
-    combined_descendants = set()
-    combined_lineage = set(author_nodes)  # Start with the author's own nodes
-    
-    for node in author_nodes:
-        # Get complete lineage for this specific node
-        ancestors = set(nx.ancestors(G, node))
-        descendants = set(nx.descendants(G, node))
-        
-        combined_ancestors.update(ancestors)
-        combined_descendants.update(descendants)
-        combined_lineage.update(ancestors)
-        combined_lineage.update(descendants)
-    
-    # Update figure title and axes
-    x_positions = [node_positions[n][0] for n in combined_lineage if n in node_positions]
-    y_positions = [node_positions[n][1] for n in combined_lineage if n in node_positions]
-    
-    if not x_positions or not y_positions:
-        print(f"No position data for lineage of {author_name}")
-        return fig
-    
-    # Calculate view bounds with padding
-    x_min, x_max = min(x_positions), max(x_positions)
-    y_min, y_max = min(y_positions), max(y_positions)
-    
-    # Add padding
-    x_padding = max(10, (x_max - x_min) * 0.2)  # Reduced padding
-    y_padding = 50
-    
-    x_range_size = x_max - x_min
-    if x_range_size < 100:
-        x_center = (x_max + x_min) / 2
-        x_min = x_center - 10
-        x_max = x_center + 10
-    
-    x_range = [x_min - x_padding, x_max + x_padding]
-    y_range = [y_min - y_padding, y_max + y_padding]
-    
-    # Update figure layout
-    fig.update_layout(
-        title=dict(
-            text=f"Lineage of '{author_name}'",
-            x=0.5,
-            y=0.98,
-            xanchor='center',
-            yanchor='top',
-            font=dict(size=20)
-        ),
-        xaxis=dict(
-            range=x_range,
-            dtick=2,
-            tickmode='linear',
-            gridcolor='lightgrey',
-            side='top'
-        ),
-        yaxis=dict(
-            range=y_range,
-        ),
-        height=800,
-        margin=dict(l=20, r=20, t=100, b=20)  # Reduced margins
-    )
-    
-    # Remove all existing traces
-    fig.data = []
-    
-    # Add edges with original colors - just filter to show only lineage edges
-    forward_direct_x = []
-    forward_direct_y = []
-    backward_direct_x = []
-    backward_direct_y = []
-    self_connection_x = []
-    self_connection_y = []
-    
-    for u, v, data in G.edges(data=True):
-        if u in combined_lineage and v in combined_lineage and u in node_positions and v in node_positions:
-            x0, y0 = node_positions[u]
-            x1, y1 = node_positions[v]
-            year_u = G.nodes[u].get('first_publication_year', 0)
-            year_v = G.nodes[v].get('first_publication_year', 0)
-
-            # Determine if this is a self-connection (solo to mentored for same author)
-            u_author = G.nodes[u].get('author')
-            v_author = G.nodes[v].get('author')
-            is_self_connection = u_author and v_author and u_author == v_author
-
-            if is_self_connection:
-                # Special styling for connections between an author's own nodes
-                self_connection_x.extend([x0, x1, None])
-                self_connection_y.extend([y0, y1, None])
-                continue
-
-            # If target year is greater than or equal to source year, it's forward
-            if year_v >= year_u:
-                forward_direct_x.extend([x0, x1, None])
-                forward_direct_y.extend([y0, y1, None])
-            else:
-                backward_direct_x.extend([x0, x1, None])
-                backward_direct_y.extend([y0, y1, None])
-    
-    # Direct mentorship (forward)
-    if forward_direct_x:
-        fig.add_trace(go.Scatter(
-            x=forward_direct_x,
-            y=forward_direct_y,
-            line=dict(width=2, color='#1f77b4'),
-            marker=dict(
-                size=9,
-                symbol="arrow",
-                angleref="previous",
-                color='#1f77b4',
-                opacity=0.85
-            ),
-            hoverinfo='none',
-            mode='lines',
-            name='Direct Mentorship (Forward)',
-            showlegend=False,
-            opacity=0.7
-        ))
-
-    # Direct mentorship (backward)
-    if backward_direct_x:
-        fig.add_trace(go.Scatter(
-            x=backward_direct_x,
-            y=backward_direct_y,
-            line=dict(width=2, color='orange'),
-                marker=dict(
-                size=9,
-                symbol="arrow",
-                angleref="previous",
-                color='orange',
-                opacity=0.85
-            ),
-            hoverinfo='none',
-            mode='lines',
-            name='Direct Mentorship (Backward)',
-            showlegend=False,
-            opacity=0.7
-        ))
-
-    # Self connections (solo to mentored)
+    # Replace the self-connection trace code with this improved version
     if self_connection_x:
+        # Process self-connection edges to avoid duplicated points
+        processed_edges = set()
+        unique_self_connection_x = []
+        unique_self_connection_y = []
+        unique_self_connection_hover = []
+
+        i = 0
+        while i < len(self_connection_x) - 2:  # Process line segments (skipping None values)
+            x0, x1 = self_connection_x[i], self_connection_x[i+1]
+            y0, y1 = self_connection_y[i], self_connection_y[i+1]
+            hover = self_connection_hover[i]
+
+            # Create an edge key for deduplication
+            edge_key = ((x0, y0), (x1, y1))
+            rev_edge_key = ((x1, y1), (x0, y0))
+
+            # Only process if this edge hasn't been seen before
+            if edge_key not in processed_edges and rev_edge_key not in processed_edges:
+                processed_edges.add(edge_key)
+                unique_self_connection_x.extend([x0, x1, None])
+                unique_self_connection_y.extend([y0, y1, None])
+                unique_self_connection_hover.extend([hover, hover, None])
+
+            i += 3  # Skip to next line segment (after the None)
+
+        # Create denser points for better hover experience
+        dense_x = []
+        dense_y = []
+        dense_hover = []
+
+        i = 0
+        while i < len(unique_self_connection_x) - 2:  # Process line segments (skipping None values)
+            x0, x1 = unique_self_connection_x[i], unique_self_connection_x[i+1]
+            y0, y1 = unique_self_connection_y[i], unique_self_connection_y[i+1]
+            hover = unique_self_connection_hover[i]
+
+            # Create intermediate points along this segment
+            for j in range(10):  # Add 10 points along each segment
+                t = j / 10
+                dense_x.append(x0 + t * (x1 - x0))
+                dense_y.append(y0 + t * (y1 - y0))
+                dense_hover.append(hover)
+
+            i += 3  # Skip to next line segment (after the None)
+
+        # Add the visible dotted line
         fig.add_trace(go.Scatter(
-            x=self_connection_x,
-            y=self_connection_y,
-            line=dict(width=2, color='green', dash='dot'),
-            hoverinfo='none',
+            x=unique_self_connection_x,
+            y=unique_self_connection_y,
+            line=dict(width=2.0, color='green', dash='dot'),
+            hoverinfo='none',  # No hover on the line itself
             mode='lines',
             name='Author Development (Solo→Mentored)',
             showlegend=False,
-            opacity=0.7
-        ))
-    
-    # Create node hover text
-    node_shapes = {
-        'solo_publication': 'circle-open',
-        'mentored_publication': 'circle'
-    }
-    
-    level_colors = {
-        'First Gen': 'red',
-        'Second Gen': 'blue',
-        'Third Gen': 'green',
-        'Fourth Gen': 'purple',
-        'Fifth Gen': 'orange',
-        'Sixth Gen': 'pink',
-        'Seventh Gen': 'brown',
-        'Other': 'grey'
-    }
-    
-    # Create list of all nodes to display
-    all_display_nodes = list(combined_lineage)
-    
-    # Get a mapping of nodes to their authors
-    node_to_author = {}
-    for node in all_display_nodes:
-        node_to_author[node] = G.nodes[node].get('author', '')
-    
-    # Group authors by their generation for more organized display
-    authors_by_generation = {}
-    for node in all_display_nodes:
-        author = node_to_author[node]
-        level = G.nodes[node].get('level', 'Unknown')
-        if level not in authors_by_generation:
-            authors_by_generation[level] = set()
-        authors_by_generation[level].add(author)
-    
-    # Group all lineage nodes by type
-    for node_type in ['solo_publication', 'mentored_publication', None]:
-        type_nodes = [n for n in all_display_nodes if n in node_positions and 
-                    (G.nodes[n].get('type') == node_type or 
-                     (node_type is None and G.nodes[n].get('type') not in ['solo_publication', 'mentored_publication']))]
-        
-        if not type_nodes:
-            continue
-        
-        node_x = [node_positions[n][0] for n in type_nodes]
-        node_y = [node_positions[n][1] for n in type_nodes]
-        
-        # Get display information
-        marker_symbol = node_shapes.get(node_type, 'circle')
-        type_name = f"{node_type.replace('_', ' ').title()} Nodes" if node_type else "Other Nodes"
-        
-        # Identify the main author's nodes
-        is_selected_author = [G.nodes[n].get('author') == author_name for n in type_nodes]
-        
-        # Prepare text labels - show names for ALL nodes in lineage
-        node_texts = [G.nodes[n].get('author', '') for n in type_nodes]
-        
-        # Size and styling based on node role
-        node_sizes = []
-        line_widths = []
-        for node in type_nodes:
-            if G.nodes[node].get('author') == author_name:
-                node_sizes.append(12)  # Larger for selected author
-                line_widths.append(2)  # Thicker border
-            elif node in combined_ancestors:
-                node_sizes.append(10)  # Medium for ancestors
-                line_widths.append(1.5)
-            elif node in combined_descendants:
-                node_sizes.append(10)  # Medium for descendants
-                line_widths.append(1.5)
-            else:
-                node_sizes.append(8)  # Standard for other lineage nodes
-                line_widths.append(1)
-        
-        # Get colors for nodes based on their generation
-        node_colors = [level_colors.get(G.nodes[n].get('level', 'Other'), 'grey') for n in type_nodes]
-        
-        # Add node trace
-        fig.add_trace(go.Scatter(
-            x=node_x,
-            y=node_y,
-            mode='markers+text',
-            marker=dict(
-                size=node_sizes,
-                color=node_colors,
-                symbol=marker_symbol,
-                line=dict(width=line_widths, color='black')
-            ),
-            text=node_texts,
-            textposition='top center',
-            textfont=dict(size=11, color='black'),
-            hoverinfo='text',
-            hovertext=[
-                f"Author: {G.nodes[n].get('author', 'Unknown')}<br>"
-                f"Node Type: {G.nodes[n].get('type', 'Unknown')}<br>"
-                f"Level: {G.nodes[n].get('level', 'Unknown')}<br>"
-                f"First Publication Year: {G.nodes[n].get('first_publication_year', 'Unknown')}<br>"
-                + (f"Predecessors: {', '.join([G.nodes[p].get('author', p) for p in G.predecessors(n)])}<br>" 
-                   if list(G.predecessors(n)) else "")
-                + (f"Successors: {', '.join([G.nodes[s].get('author', s) for s in G.successors(n)])}" 
-                   if list(G.successors(n)) else "")
-                for n in type_nodes
-            ],
-            name=type_name,
-            showlegend=False
+            opacity=0.8
         ))
 
-    return fig
+        # Add truly invisible hover points with larger click area
+        fig.add_trace(go.Scatter(
+            x=dense_x,
+            y=dense_y,
+            mode="none",
+            marker=dict(
+                size=9,
+                opacity=0,
+                color="rgba(0,0,0,0)",  # Completely transparent color
+                line=dict(width=0)  # No border
+            ),
+            hoverinfo="text",
+            hovertext=dense_hover,
+            showlegend=False,
+            hoverlabel=dict(
+                bgcolor="#4caf50",
+                font_size=12,
+                font_family="Arial",
+                font_color="white"
+            )
+        ))
+
+        # Update layout for better hover behavior
+        fig.update_layout(
+            hovermode='closest',
+            hoverdistance=20  # Increase hover detection distance
+        )
+
+    return fig, edge_traces, node_traces
 
 def highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_track_record=None, author_nodes=None):
     """
