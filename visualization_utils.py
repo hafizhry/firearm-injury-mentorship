@@ -3,6 +3,28 @@ import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
 import streamlit as st
+import time
+
+@st.cache_data(ttl=3600) 
+def compute_positions_for_graph(graph_id, grid_spacing=40):
+    """
+    Compute node positions using a string ID instead of G.
+    This is a cache-friendly wrapper around compute_sequential_grid_positions.
+    """
+    # Import here to avoid circular imports
+    from app import load_data
+    
+    # Get the graph from the cached function
+    start_time = time.time()
+    G, _ = load_data()
+    print(f"Graph loaded for positions in {time.time() - start_time:.2f} seconds")
+    
+    # Call the uncached function
+    start_time = time.time()
+    node_positions, nodes_by_level = compute_sequential_grid_positions(G, grid_spacing)
+    print(f"Positions computed in {time.time() - start_time:.2f} seconds")
+    
+    return node_positions, nodes_by_level
 
 def compute_sequential_grid_positions(G, grid_spacing=40):
     """
@@ -131,6 +153,18 @@ def compute_sequential_grid_positions(G, grid_spacing=40):
         current_base_row = max_row + 2  # Add padding between lineages
 
     return node_positions, nodes_by_level
+
+@st.cache_data
+def create_figure_cached(graph_id, selected_mentor=None):
+    """Cache-friendly wrapper around create_figure"""
+    from app import load_data
+    G, _ = load_data()
+    
+    # Get positions
+    node_positions, _ = compute_positions_for_graph(graph_id)
+    
+    # Create the figure
+    return create_figure(G, node_positions, selected_mentor)
 
 def create_figure(G, node_positions, selected_mentor=None):
     """
