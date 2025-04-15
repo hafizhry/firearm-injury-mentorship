@@ -89,7 +89,7 @@ future generations of researchers can build upon their predecessors' work effect
 # Load data from pickle files
 @st.cache_resource
 def load_data():
-    with open(f'source_files/G_v5.2.pkl', 'rb') as pickle_file:
+    with open(f'source_files/G.pkl', 'rb') as pickle_file:
         G = pickle.load(pickle_file)
 
     with open(f'source_files/df_track_record.pkl', 'rb') as pickle_file:
