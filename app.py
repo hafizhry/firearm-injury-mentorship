@@ -4,7 +4,7 @@ import streamlit as st
 import pickle
 import base64
 import time
-from visualization_utils import compute_positions_for_graph, create_figure, highlight_and_zoom_to_mentor, calculate_mentorship_stats, create_figure_cached
+from visualization_utils import compute_positions_for_graph, highlight_and_zoom_to_mentor, calculate_mentorship_stats, create_figure_cached
 
 # Load and encode the background image
 def get_base64_of_bin_file(bin_file):
@@ -261,7 +261,7 @@ def main():
     # Use the cached function to get author lookup
     with st.spinner("Preparing author data..."):
         start_time = time.time()
-        author_lookup = prepare_author_lookup("graph_v1")
+        author_lookup = prepare_author_lookup("graph_cache")
         prep_time = time.time() - start_time
         st.toast(f"Author data prepared in {prep_time:.2f} seconds", icon="✅")
 
@@ -287,8 +287,8 @@ def main():
     # Execute compute positions with caching
     with st.spinner("Computing node positions..."):
         start_time = time.time()
-        # Use the graph_id "graph_v1" as a stable identifier for caching
-        node_positions, nodes_by_level = compute_positions_for_graph("graph_v1")
+        # Use the graph_id "graph_cache" as a stable identifier for caching
+        node_positions, nodes_by_level = compute_positions_for_graph("graph_cache")
         compute_time = time.time() - start_time
         st.toast(f"Positions computed in {compute_time:.2f} seconds", icon="✅")
 
@@ -299,10 +299,10 @@ def main():
         # Use cached figure creation instead of direct call
         if selected_mentor == "World View":
             # For world view, use the cached function with no mentor selected
-            fig, edge_trace, node_traces = create_figure_cached("graph_v1")
+            fig, edge_trace, node_traces = create_figure_cached("graph_cache")
         else:
             # For author-specific view, use the cached function with the mentor
-            fig, edge_trace, node_traces = create_figure_cached("graph_v1", final_search_term)
+            fig, edge_trace, node_traces = create_figure_cached("graph_cache", final_search_term)
         
         # Apply search and zoom if search term is provided and not World View
         if final_search_term:
