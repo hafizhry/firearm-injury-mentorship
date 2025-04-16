@@ -25,66 +25,66 @@ def set_background_image(png_file):
     ''' % bin_str
     return page_bg_img
 
-# Set the background image
-background_image_path = "source_files/Shield-Pattern-Hero.png"
-st.markdown(set_background_image(background_image_path), unsafe_allow_html=True)
+# # Set the background image
+# background_image_path = "source_files/Shield-Pattern-Hero.png"
+# st.markdown(set_background_image(background_image_path), unsafe_allow_html=True)
 
-# Add custom CSS for the title section
-st.markdown("""
-    <style>
-        .title-container {
-            position: relative;
-            text-align: center;
-            color: white;
-            padding: 4rem 0;
-            margin-bottom: 2rem;
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            min-height: 100px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-        }
-        .title-text {
-            font-size: 2.5rem;
-            font-weight: bold;
-            text-decoration: none;
-            border-bottom: 3px solid #FFD43B;
-            color: white;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-            margin: 0;
-            padding: 1rem 0;
-            display: inline-block;
-        }
-        .subtitle-text {
-            color: white;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-            margin: 0;
-            padding-bottom: 1rem;
-        }
-    </style>
-    <div class="title-container">
-        <h1 class="title-text">Shirtsleeves to Shirtsleeves in Three Generations</h1>
-    </div>
-""", unsafe_allow_html=True)
+# # Add custom CSS for the title section
+# st.markdown("""
+#     <style>
+#         .title-container {
+#             position: relative;
+#             text-align: center;
+#             color: white;
+#             padding: 4rem 0;
+#             margin-bottom: 2rem;
+#             background-size: cover;
+#             background-position: center;
+#             background-repeat: no-repeat;
+#             min-height: 100px;
+#             display: flex;
+#             flex-direction: column;
+#             justify-content: center;
+#             align-items: center;
+#         }
+#         .title-text {
+#             font-size: 2.5rem;
+#             font-weight: bold;
+#             text-decoration: none;
+#             border-bottom: 3px solid #FFD43B;
+#             color: white;
+#             text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+#             margin: 0;
+#             padding: 1rem 0;
+#             display: inline-block;
+#         }
+#         .subtitle-text {
+#             color: white;
+#             text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+#             margin: 0;
+#             padding-bottom: 1rem;
+#         }
+#     </style>
+#     <div class="title-container">
+#         <h1 class="title-text">Shirtsleeves to Shirtsleeves in Three Generations</h1>
+#     </div>
+# """, unsafe_allow_html=True)
 
-st.markdown("""
-### A University of Michigan Project on Research Legacy in Firearm Injury Prevention
+# st.markdown("""
+# ### A University of Michigan Project on Research Legacy in Firearm Injury Prevention
 
-This visualization explores the mentorship lineages in firearm injury research, inspired by the economic principle 
-"shirtsleeves to shirtsleeves in three generations" - where wealth typically diminishes through generations.
+# This visualization explores the mentorship lineages in firearm injury research, inspired by the economic principle 
+# "shirtsleeves to shirtsleeves in three generations" - where wealth typically diminishes through generations.
 
-In firearm injury research, we examine how research expertise and funding, like wealth, can be sustained across 
-generations of mentors and mentees. Since the field's inception fifty years ago, we've seen pioneering investigators, 
-faced funding challenges, and now witness renewed support for research.
+# In firearm injury research, we examine how research expertise and funding, like wealth, can be sustained across 
+# generations of mentors and mentees. Since the field's inception fifty years ago, we've seen pioneering investigators, 
+# faced funding challenges, and now witness renewed support for research.
 
-**Our Goal**: To understand and strengthen the mentorship patterns that create lasting research legacies, ensuring 
-future generations of researchers can build upon their predecessors' work effectively.
+# **Our Goal**: To understand and strengthen the mentorship patterns that create lasting research legacies, ensuring 
+# future generations of researchers can build upon their predecessors' work effectively.
 
----
-""")
+# ---
+# """)
 
 # Load data from pickle files
 @st.cache_resource
