@@ -4,7 +4,7 @@ import streamlit as st
 import pickle
 import base64
 import time
-from visualization_utils import compute_positions_for_graph, highlight_and_zoom_to_mentor, calculate_mentorship_stats, create_figure_cached
+from visualization_utils import compute_positions_for_graph, highlight_and_zoom_to_mentor, calculate_mentorship_stats, create_figure_cached, create_world_view
 
 # Load and encode the background image
 def get_base64_of_bin_file(bin_file):
@@ -299,7 +299,7 @@ def main():
         # Use cached figure creation instead of direct call
         if selected_mentor == "World View":
             # For world view, use the cached function with no mentor selected
-            fig, edge_trace, node_traces = create_figure_cached("graph_cache")
+            fig, edge_trace, node_traces = create_world_view("graph_cache")
         else:
             # For author-specific view, use the cached function with the mentor
             fig, edge_trace, node_traces = create_figure_cached("graph_cache", final_search_term)
