@@ -8,7 +8,6 @@ def compute_sequential_grid_positions(G, grid_spacing=40):
     """
     Compute node positions by processing complete lineages sequentially.
     Each lineage tree gets its own grid space.
-    Places *_solo and *_mentored nodes for the same author on the same y-axis.
     """
     node_positions = {}
     nodes_by_level = {
