@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 import time
 
-@st.cache_data() 
+@st.cache_resource(show_spinner=False) 
 def compute_positions_for_graph(graph_id, grid_spacing=40):
     """
     Compute node positions using a string ID instead of G.
@@ -154,7 +154,7 @@ def compute_sequential_grid_positions(G, grid_spacing=40):
 
     return node_positions, nodes_by_level
 
-@st.cache_data
+@st.cache_resource(show_spinner=False)
 def create_figure_cached(graph_id, selected_mentor=None):
     """Cache-friendly wrapper around create_figure"""
     from app import load_data
@@ -166,7 +166,7 @@ def create_figure_cached(graph_id, selected_mentor=None):
     # Create the figure
     return create_figure(G, node_positions, selected_mentor)
 
-@st.cache_data()  # Cache for 1 hour
+@st.cache_resource(show_spinner=False)
 def create_world_view(graph_id):
     """
     Create and cache the complete world view graph visualization.

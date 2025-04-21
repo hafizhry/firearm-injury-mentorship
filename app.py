@@ -296,16 +296,13 @@ def main():
     with st.spinner("Rendering visualization..."):
         start_time = time.time()
         
-        # Use cached figure creation instead of direct call
         if selected_mentor == "World View":
-            # For world view, use the cached function with no mentor selected
+            # Use the cached world view
             fig, edge_trace, node_traces = create_world_view("graph_cache")
         else:
             # For author-specific view, use the cached function with the mentor
             fig, edge_trace, node_traces = create_figure_cached("graph_cache", final_search_term)
-        
-        # Apply search and zoom if search term is provided and not World View
-        if final_search_term:
+            
             # First identify the author name for this node
             author_name = G.nodes[final_search_term].get('author', '')
 
@@ -314,80 +311,6 @@ def main():
 
             # Highlight and zoom to all nodes for this author
             fig = highlight_and_zoom_to_mentor(fig, G, node_positions, final_search_term, df_track_record, author_nodes)
-        else:
-            # Calculate the min and max y-coordinates from node positions
-            y_values = [pos[1] for pos in node_positions.values()]
-            min_y = min(y_values) - 3000  # Add padding below the graph
-            max_y = max(y_values) + 3000  # Add padding above the graph
-
-            # Reset to world view settings
-            fig.update_layout(
-                xaxis=dict(
-                    range=[1969, 2026],
-                    dtick=5,
-                    tickmode='linear',
-                    side='top'
-                ),
-                yaxis=dict(
-                    range=[min_y, max_y],
-                ),
-                height=20000,
-            )
-
-            # Add repeating x-axis grid lines at regular intervals
-            # Set fixed x-axis range
-            x_min = 1965
-            x_max = 2030
-
-            # Create repeating x-axis grids at large intervals
-            y_interval = 40000  # Large interval for repeating x-axis
-            y_start = min_y + 5000  # Start a bit below the top axis
-
-            # Calculate how many repeating axes we need
-            num_repeats = int((max_y - y_start) / y_interval) + 1
-
-            # Add subtle horizontal grid lines at each repeat position
-            for i in range(num_repeats):
-                y_pos = y_start + (i * y_interval)
-
-                # Skip if we're at the very top (original axis)
-                if y_pos < y_start + 1000:
-                    continue
-
-                # Add a horizontal line to represent the x-axis
-                fig.add_shape(
-                    type="line",
-                    x0=x_min,
-                    y0=y_pos,
-                    x1=x_max,
-                    y1=y_pos,
-                    line=dict(
-                        color="rgba(150, 150, 150, 0.3)",  # Subtle color
-                        width=1,
-                        dash="solid",
-                    )
-                )
-
-                # Add year labels at 5-year intervals
-                for year in range(x_min, x_max + 1, 5):  # Every 5 years
-                    fig.add_annotation(
-                        x=year,
-                        y=y_pos,
-                        text=str(year),
-                        showarrow=False,
-                        font=dict(
-                            size=9,  # Smaller font
-                            color="rgba(100, 100, 100, 0.5)"  # Subtle color
-                        ),
-                        yshift=10
-                    )
-
-            # Reset all nodes to full opacity and original size
-            for trace in fig.data:
-                if hasattr(trace, 'marker'):
-                    trace.marker.opacity = 1.0
-                    trace.marker.size = 7
-                    trace.textfont.color = 'rgba(0,0,0,0)'  # Hide all text in world view
         
         render_time = time.time() - start_time
         st.toast(f"Visualization rendered in {render_time:.2f} seconds", icon="✅")
