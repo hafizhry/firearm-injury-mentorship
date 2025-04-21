@@ -155,18 +155,6 @@ def compute_sequential_grid_positions(G, grid_spacing=40):
     return node_positions, nodes_by_level
 
 @st.cache_resource(show_spinner=False)
-def create_figure_cached(graph_id, selected_mentor=None):
-    """Cache-friendly wrapper around create_figure"""
-    from app import load_data
-    G, _ = load_data()
-    
-    # Get positions
-    node_positions, _ = compute_positions_for_graph(graph_id)
-    
-    # Create the figure
-    return create_figure(G, node_positions, selected_mentor)
-
-@st.cache_resource(show_spinner=False)
 def create_world_view(graph_id):
     """
     Create and cache the complete world view graph visualization.
@@ -251,9 +239,38 @@ def create_world_view(graph_id):
         if hasattr(trace, 'marker'):
             trace.marker.opacity = 1.0
             trace.marker.size = 7
-            trace.textfont.color = 'rgba(0,0,0,0)'  # Hide all text in world view
+            trace.textfont.color = 'rgba(0,0,0,0)'
     
     return fig, edge_trace, node_traces
+
+@st.cache_resource(show_spinner=False, ttl=3600, max_entries=100)
+def create_author_view(graph_id, selected_mentor):
+    """
+    Create and cache the author-specific view graph visualization.
+    This function handles the entire author view creation and caching.
+    """
+    # Import here to avoid circular imports
+    from app import load_data
+    
+    # Get the graph from the cached function
+    G, df_track_record = load_data()
+    
+    # Get positions
+    node_positions, nodes_by_level = compute_positions_for_graph(graph_id)
+    
+    # Create the figure
+    fig, edge_trace, node_traces = create_figure(G, node_positions, selected_mentor)
+    
+    # First identify the author name for this node
+    author_name = G.nodes[selected_mentor].get('author', '')
+
+    # Find all nodes for this author
+    author_nodes = [n for n in G.nodes() if G.nodes[n].get('author') == author_name]
+
+    # Highlight and zoom to all nodes for this author
+    fig = highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_track_record, author_nodes)
+    
+    return fig
 
 def create_figure(G, node_positions, selected_mentor=None):
     """

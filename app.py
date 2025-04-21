@@ -4,7 +4,7 @@ import streamlit as st
 import pickle
 import base64
 import time
-from visualization_utils import compute_positions_for_graph, highlight_and_zoom_to_mentor, calculate_mentorship_stats, create_figure_cached, create_world_view
+from visualization_utils import compute_positions_for_graph, calculate_mentorship_stats, create_world_view, create_author_view
 
 # Load and encode the background image
 def get_base64_of_bin_file(bin_file):
@@ -73,67 +73,6 @@ def prepare_author_lookup(graph_id):
 def main():
     # Set page config
     st.set_page_config(layout="wide", page_title="Shirtsleeves to Shirtsleeves")
-
-    # # Set the background image
-    # background_image_path = "source_files/Shield-Pattern-Hero.png"
-    # st.markdown(set_background_image(background_image_path), unsafe_allow_html=True)
-
-    # # Add custom CSS for the title section
-    # st.markdown("""
-    #     <style>
-    #         .title-container {
-    #             position: relative;
-    #             text-align: center;
-    #             color: white;
-    #             padding: 4rem 0;
-    #             margin-bottom: 2rem;
-    #             background-size: cover;
-    #             background-position: center;
-    #             background-repeat: no-repeat;
-    #             min-height: 100px;
-    #             display: flex;
-    #             flex-direction: column;
-    #             justify-content: center;
-    #             align-items: center;
-    #         }
-    #         .title-text {
-    #             font-size: 2.5rem;
-    #             font-weight: bold;
-    #             text-decoration: none;
-    #             border-bottom: 3px solid #FFD43B;
-    #             color: white;
-    #             text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-    #             margin: 0;
-    #             padding: 1rem 0;
-    #             display: inline-block;
-    #         }
-    #         .subtitle-text {
-    #             color: white;
-    #             text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-    #             margin: 0;
-    #             padding-bottom: 1rem;
-    #         }
-    #     </style>
-    #     <div class="title-container">
-    #         <h1 class="title-text">Shirtsleeves to Shirtsleeves in Three Generations</h1>
-    #     </div>
-    # """, unsafe_allow_html=True)
-
-    # st.markdown("""
-    # ### A University of Michigan Project on Research Legacy in Firearm Injury Prevention
-
-    # This visualization explores the mentorship lineages in firearm injury research, inspired by the economic principle 
-    # "shirtsleeves to shirtsleeves in three generations" - where wealth typically diminishes through generations.
-
-    # In firearm injury research, we examine how research expertise and funding, like wealth, can be sustained across 
-    # generations of mentors and mentees. Since the field's inception fifty years ago, we've seen pioneering investigators, 
-    # faced funding challenges, and now witness renewed support for research.
-
-    # **Our Goal**: To understand and strengthen the mentorship patterns that create lasting research legacies, ensuring 
-    # future generations of researchers can build upon their predecessors' work effectively.
-
-    # ---
-    # """)
 
     # Load data with timing information
     with st.spinner("Loading graph data..."):
@@ -301,17 +240,8 @@ def main():
             fig, edge_trace, node_traces = create_world_view("graph_cache")
         else:
             # For author-specific view, use the cached function with the mentor
-            fig, edge_trace, node_traces = create_figure_cached("graph_cache", final_search_term)
-            
-            # First identify the author name for this node
-            author_name = G.nodes[final_search_term].get('author', '')
-
-            # Find all nodes for this author
-            author_nodes = [n for n in G.nodes() if G.nodes[n].get('author') == author_name]
-
-            # Highlight and zoom to all nodes for this author
-            fig = highlight_and_zoom_to_mentor(fig, G, node_positions, final_search_term, df_track_record, author_nodes)
-        
+            fig = create_author_view("graph_cache", final_search_term)
+    
         render_time = time.time() - start_time
         st.toast(f"Visualization rendered in {render_time:.2f} seconds", icon="✅")
 
