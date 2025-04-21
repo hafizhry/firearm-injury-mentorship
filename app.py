@@ -28,7 +28,7 @@ def load_data():
     return G, df_track_record
 
 # Cache the author lookup creation
-@st.cache_data
+@st.cache_resource
 def prepare_author_lookup(graph_id):
     """Create a lookup of authors to their nodes"""
     G, _ = load_data()  # Use the cached graph
