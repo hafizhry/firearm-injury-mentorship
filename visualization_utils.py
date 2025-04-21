@@ -21,10 +21,10 @@ def compute_positions_for_graph(graph_id, grid_spacing=40):
     
     # Call the uncached function
     start_time = time.time()
-    node_positions, nodes_by_level = compute_sequential_grid_positions(G, grid_spacing)
+    node_positions = compute_sequential_grid_positions(G, grid_spacing)
     print(f"Positions computed in {time.time() - start_time:.2f} seconds")
     
-    return node_positions, nodes_by_level
+    return node_positions
 
 def compute_sequential_grid_positions(G, grid_spacing=40):
     """
@@ -151,7 +151,7 @@ def compute_sequential_grid_positions(G, grid_spacing=40):
         # Start next lineage at new base row with some padding
         current_base_row = max_row + 2  # Add padding between lineages
 
-    return node_positions, nodes_by_level
+    return node_positions
 
 @st.cache_resource(show_spinner=False)
 def create_world_view(graph_id):
@@ -166,10 +166,10 @@ def create_world_view(graph_id):
     G, _ = load_data()
     
     # Get positions
-    node_positions, nodes_by_level = compute_positions_for_graph(graph_id)
+    node_positions = compute_positions_for_graph(graph_id)
     
     # Create the world view figure
-    fig, edge_trace, node_traces = create_figure(G, node_positions, selected_mentor=None)
+    fig = create_figure(G, node_positions, selected_mentor=None)
     
     # Calculate the min and max y-coordinates from node positions
     y_values = [pos[1] for pos in node_positions.values()]
@@ -240,7 +240,7 @@ def create_world_view(graph_id):
             trace.marker.size = 7
             trace.textfont.color = 'rgba(0,0,0,0)'
     
-    return fig, edge_trace, node_traces
+    return fig
 
 @st.cache_resource(show_spinner=False, ttl=3600, max_entries=100)
 def create_author_view(graph_id, selected_mentor):
@@ -255,10 +255,10 @@ def create_author_view(graph_id, selected_mentor):
     G, df_track_record = load_data()
     
     # Get positions
-    node_positions, nodes_by_level = compute_positions_for_graph(graph_id)
+    node_positions = compute_positions_for_graph(graph_id)
     
     # Create the figure
-    fig, edge_trace, node_traces = create_figure(G, node_positions, selected_mentor)
+    fig = create_figure(G, node_positions, selected_mentor)
     
     # First identify the author name for this node
     author_name = G.nodes[selected_mentor].get('author', '')
@@ -609,7 +609,7 @@ def create_figure(G, node_positions, selected_mentor=None):
             hoverdistance=20  # Increase hover detection distance
         )
 
-    return fig, edge_traces, node_traces
+    return fig
 
 def highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_track_record=None, author_nodes=None):
     """

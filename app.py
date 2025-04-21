@@ -70,7 +70,7 @@ def main():
         load_time = time.time() - start_time
         st.toast(f"Graph loaded in {load_time:.2f} seconds", icon="✅")
 
-    st.markdown(""" 
+    st.markdown("""
     ### Search and Select Author
 
     In this visualization, each dot represents a publication by an author in the mentorship network. Authors can have two types of publications: solo publications (hollow circles) and mentored publications (filled circles). The lines connecting dots show mentorship relationships:
@@ -216,21 +216,21 @@ def main():
     with st.spinner("Computing node positions..."):
         start_time = time.time()
         # Use the graph_id "graph_cache" as a stable identifier for caching
-        node_positions, nodes_by_level = compute_positions_for_graph("graph_cache")
+        node_positions = compute_positions_for_graph("graph_cache")
         compute_time = time.time() - start_time
         st.toast(f"Positions computed in {compute_time:.2f} seconds", icon="✅")
 
     # Create visualization
     with st.spinner("Rendering visualization..."):
         start_time = time.time()
-        
+
         if selected_mentor == "World View":
             # Use the cached world view
-            fig, edge_trace, node_traces = create_world_view("graph_cache")
+            fig = create_world_view("graph_cache")
         else:
             # For author-specific view, use the cached function with the mentor
             fig = create_author_view("graph_cache", final_search_term)
-    
+
         render_time = time.time() - start_time
         st.toast(f"Visualization rendered in {render_time:.2f} seconds", icon="✅")
 
