@@ -3,6 +3,28 @@ import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
 import streamlit as st
+import time
+
+@st.cache_resource(show_spinner=False) 
+def compute_positions_for_graph(graph_id, grid_spacing=40):
+    """
+    Compute node positions using a string ID instead of G.
+    This is a cache-friendly wrapper around compute_sequential_grid_positions.
+    """
+    # Import here to avoid circular imports
+    from app import load_data
+    
+    # Get the graph from the cached function
+    start_time = time.time()
+    G, _ = load_data()
+    print(f"Graph loaded for positions in {time.time() - start_time:.2f} seconds")
+    
+    # Call the uncached function
+    start_time = time.time()
+    node_positions, nodes_by_level = compute_sequential_grid_positions(G, grid_spacing)
+    print(f"Positions computed in {time.time() - start_time:.2f} seconds")
+    
+    return node_positions, nodes_by_level
 
 def compute_sequential_grid_positions(G, grid_spacing=40):
     """
@@ -130,6 +152,124 @@ def compute_sequential_grid_positions(G, grid_spacing=40):
         current_base_row = max_row + 2  # Add padding between lineages
 
     return node_positions, nodes_by_level
+
+@st.cache_resource(show_spinner=False)
+def create_world_view(graph_id):
+    """
+    Create and cache the complete world view graph visualization.
+    This function handles the entire world view creation and caching.
+    """
+    # Import here to avoid circular imports
+    from app import load_data
+    
+    # Get the graph from the cached function
+    G, _ = load_data()
+    
+    # Get positions
+    node_positions, nodes_by_level = compute_positions_for_graph(graph_id)
+    
+    # Create the world view figure
+    fig, edge_trace, node_traces = create_figure(G, node_positions, selected_mentor=None)
+    
+    # Calculate the min and max y-coordinates from node positions
+    y_values = [pos[1] for pos in node_positions.values()]
+    min_y = min(y_values) - 3000  # Add padding below the graph
+    max_y = max(y_values) + 3000  # Add padding above the graph
+
+    # Set world view settings
+    fig.update_layout(
+        xaxis=dict(
+            range=[1969, 2026],
+            dtick=5,
+            tickmode='linear',
+            side='top'
+        ),
+        yaxis=dict(
+            range=[min_y, max_y],
+        ),
+        height=20000,
+    )
+
+    # Add repeating x-axis grid lines
+    x_min = 1965
+    x_max = 2030
+    y_interval = 40000
+    y_start = min_y + 5000
+
+    # Calculate how many repeating axes we need
+    num_repeats = int((max_y - y_start) / y_interval) + 1
+
+    # Add grid lines at each repeat position
+    for i in range(num_repeats):
+        y_pos = y_start + (i * y_interval)
+        if y_pos < y_start + 1000:
+            continue
+
+        # Add a horizontal line
+        fig.add_shape(
+            type="line",
+            x0=x_min,
+            y0=y_pos,
+            x1=x_max,
+            y1=y_pos,
+            line=dict(
+                color="rgba(150, 150, 150, 0.3)",
+                width=1,
+                dash="solid",
+            )
+        )
+
+        # Add year labels
+        for year in range(x_min, x_max + 1, 5):
+            fig.add_annotation(
+                x=year,
+                y=y_pos,
+                text=str(year),
+                showarrow=False,
+                font=dict(
+                    size=9,
+                    color="rgba(100, 100, 100, 0.5)"
+                ),
+                yshift=10
+            )
+
+    # Reset all nodes to full opacity and original size
+    for trace in fig.data:
+        if hasattr(trace, 'marker'):
+            trace.marker.opacity = 1.0
+            trace.marker.size = 7
+            trace.textfont.color = 'rgba(0,0,0,0)'
+    
+    return fig, edge_trace, node_traces
+
+@st.cache_resource(show_spinner=False, ttl=3600, max_entries=100)
+def create_author_view(graph_id, selected_mentor):
+    """
+    Create and cache the author-specific view graph visualization.
+    This function handles the entire author view creation and caching.
+    """
+    # Import here to avoid circular imports
+    from app import load_data
+    
+    # Get the graph from the cached function
+    G, df_track_record = load_data()
+    
+    # Get positions
+    node_positions, nodes_by_level = compute_positions_for_graph(graph_id)
+    
+    # Create the figure
+    fig, edge_trace, node_traces = create_figure(G, node_positions, selected_mentor)
+    
+    # First identify the author name for this node
+    author_name = G.nodes[selected_mentor].get('author', '')
+
+    # Find all nodes for this author
+    author_nodes = [n for n in G.nodes() if G.nodes[n].get('author') == author_name]
+
+    # Highlight and zoom to all nodes for this author
+    fig = highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_track_record, author_nodes)
+    
+    return fig
 
 def create_figure(G, node_positions, selected_mentor=None):
     """
