@@ -242,7 +242,7 @@ def create_world_view(graph_id):
     
     return fig
 
-@st.cache_resource(show_spinner=False, ttl=3600, max_entries=100)
+@st.cache_resource(show_spinner=False, max_entries=100)
 def create_author_view(graph_id, selected_mentor):
     """
     Create and cache the author-specific view graph visualization.
