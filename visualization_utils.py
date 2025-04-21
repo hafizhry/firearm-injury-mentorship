@@ -611,6 +611,73 @@ def create_figure(G, node_positions, selected_mentor=None):
 
     return fig
 
+@st.cache_resource(show_spinner=False)
+def precompute_author_relationships(graph_id):
+    """
+    Precompute ancestor and descendant relationships for all authors.
+    This significantly speeds up author queries by avoiding repeated graph traversals.
+    """
+    # Import here to avoid circular imports
+    from app import load_data
+    
+    # Get the graph from the cached function
+    start_time = time.time()
+    G, _ = load_data()
+    print(f"Graph loaded for relationship precomputation in {time.time() - start_time:.2f} seconds")
+    
+    # Create a mapping of authors to their nodes
+    author_to_nodes = {}
+    for node in G.nodes():
+        author = G.nodes[node].get('author', '')
+        if author:
+            if author not in author_to_nodes:
+                author_to_nodes[author] = []
+            author_to_nodes[author].append(node)
+    
+    # For each author, compute their relationships
+    author_relationships = {}
+    start_time = time.time()
+    total_authors = len(author_to_nodes)
+    
+    for i, (author, nodes) in enumerate(author_to_nodes.items()):
+        # Skip if no nodes for this author
+        if not nodes:
+            continue
+            
+        # Use the first node as representative
+        primary_node = nodes[0]
+        
+        # Compute relationships once for this author
+        ancestors = set()
+        descendants = set()
+        
+        for node in nodes:
+            ancestors.update(nx.ancestors(G, node))
+            descendants.update(nx.descendants(G, node))
+        
+        # Store all the precomputed data
+        author_relationships[author] = {
+            'nodes': nodes,
+            'primary_node': primary_node,
+            'ancestors': list(ancestors),
+            'descendants': list(descendants),
+            'lineage': list(ancestors.union(descendants).union(set(nodes))),
+            'generation': G.nodes[primary_node].get('level', 'Unknown')
+        }
+        
+        # Optional: Add mentorship statistics
+        stats = calculate_mentorship_stats(G, primary_node)
+        author_relationships[author]['stats'] = stats
+        
+        # Print progress for large graphs
+        if (i + 1) % 100 == 0 or (i + 1) == total_authors:
+            print(f"Processed {i + 1}/{total_authors} authors")
+    
+    compute_time = time.time() - start_time
+    print(f"Author relationships precomputed in {compute_time:.2f} seconds")
+    
+    return author_relationships
+
 def highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_track_record=None, author_nodes=None):
     """
     Highlight an author and their lineage, then zoom to their position
@@ -622,19 +689,28 @@ def highlight_and_zoom_to_mentor(fig, G, node_positions, selected_mentor, df_tra
 
     # Get the author name for the selected mentor
     author_name = G.nodes[selected_mentor].get('author', '')
-
-    # If author_nodes not provided, get all nodes for this author
-    if author_nodes is None:
-        author_nodes = [n for n in G.nodes() if G.nodes[n].get('author') == author_name]
-
-    # Get ancestors and descendants for all nodes of this author
-    ancestors = set()
-    descendants = set()
-    for node in author_nodes:
-        ancestors.update(nx.ancestors(G, node))
-        descendants.update(nx.descendants(G, node))
-
-    lineage = list(ancestors.union(descendants).union(set(author_nodes)))
+    
+    # Get precomputed relationships if available
+    precomputed = precompute_author_relationships("graph_cache")
+    
+    if author_name in precomputed:
+        # Use precomputed data
+        author_data = precomputed[author_name]
+        author_nodes = author_data['nodes']
+        lineage = author_data['lineage']
+    else:
+        # Fallback to computing on the fly (should rarely happen)
+        if author_nodes is None:
+            author_nodes = [n for n in G.nodes() if G.nodes[n].get('author') == author_name]
+            
+        # Get ancestors and descendants for all nodes of this author
+        ancestors = set()
+        descendants = set()
+        for node in author_nodes:
+            ancestors.update(nx.ancestors(G, node))
+            descendants.update(nx.descendants(G, node))
+            
+        lineage = list(ancestors.union(descendants).union(set(author_nodes)))
 
     # Get position of the selected mentor
     if selected_mentor in node_positions:

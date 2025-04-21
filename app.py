@@ -70,6 +70,14 @@ def main():
         load_time = time.time() - start_time
         st.toast(f"Graph loaded in {load_time:.2f} seconds", icon="✅")
 
+    # Precompute author relationships for faster queries
+    with st.spinner("Precomputing author relationships..."):
+        start_time = time.time()
+        from visualization_utils import precompute_author_relationships
+        precompute_author_relationships("graph_cache")
+        precompute_time = time.time() - start_time
+        st.toast(f"Author relationships precomputed in {precompute_time:.2f} seconds", icon="✅")
+
     st.markdown("""
     ### Search and Select Author
 
@@ -250,8 +258,17 @@ def main():
     if final_search_term and final_search_term != "World View":
         st.markdown('<h3 style="margin: 0 0 10px 0; text-align: center;">Mentorship Tree Statistics</h3>', unsafe_allow_html=True)
 
-        # Calculate statistics
-        stats = calculate_mentorship_stats(G, final_search_term)
+        # Get author name
+        author_name = G.nodes[final_search_term].get('author', '')
+        
+        # Get precomputed relationships
+        precomputed = precompute_author_relationships("graph_cache")
+        
+        # Get statistics (either from precomputed or calculate)
+        if author_name in precomputed and 'stats' in precomputed[author_name]:
+            stats = precomputed[author_name]['stats']
+        else:
+            stats = calculate_mentorship_stats(G, final_search_term)
 
         # Create five columns for the statistics
         col1, col2, col3, col4, col5 = st.columns(5)
